@@ -74,31 +74,40 @@ public:
 	}
 
 	template<class T>
-	void get_impl(std::vector<std::vector<T>*>& out)
+	void get_impl(const std::vector<typeId>& typeIds, std::vector<std::vector<T>*>& out)
 	{
-		typeId neededType = type_id<T>();
 		for (auto& desc : archetypes)
 		{
-			if (std::find(desc.containedTypes.begin(), desc.containedTypes.end(), neededType) != desc.containedTypes.end())
+			// if all the typeIds are present in the desc, we're good
+			size_t requiredTypeIndex = 0;
+			size_t containedTypeCount = desc.containedTypes.size();
+			for (size_t i = 0; i < containedTypeCount; i++)
 			{
-				auto v = static_cast<std::vector<T>*>(desc.archetype->getComponent(neededType));
-				if (v) out.push_back(v);
+				if (desc.containedTypes[i] == typeIds[requiredTypeIndex])
+					requiredTypeIndex++;
 			}
+
+			if(requiredTypeIndex < typeIds.size())
+				continue;
+
+			auto v = static_cast<std::vector<T>*>(desc.archetype->getComponent(type_id<T>()));
+			if (v) 
+				out.push_back(v);
 		}
 	}
 
 	template<class T, class ...Ts>
-	void get_impl(std::vector<std::vector<T>*>& out, std::vector<std::vector<Ts>*>&... restOut)
+	void get_impl(const std::vector<typeId>& typeIds, std::vector<std::vector<T>*>& out, std::vector<std::vector<Ts>*>&... restOut)
 	{
-		get_impl<T>(out);
-		get_impl<Ts...>(restOut...);
+		get_impl(typeIds, out);
+		get_impl(typeIds, restOut...);
 	}
 
 	template<class ...Ts> 
 	std::tuple<std::vector<std::vector<Ts>*>...> get()
 	{
 		std::tuple<std::vector<std::vector<Ts>*>...> ret = {};
-		std::apply([&](auto& ...x) { get_impl(x...); }, ret);
+		std::apply([&](auto& ...x) { get_impl(getTypes<Ts...>(), x...); }, ret);
 		return ret;
 	}
 
@@ -110,7 +119,7 @@ int main()
 {
 	Ecs ecs;
 	ecs.registerArchetype<int, float>();
-	ecs.registerArchetype<double, float>();
+	ecs.registerArchetype<double, float, int>();
 	ecs.registerArchetype<int, double>();
 
 	auto a = ecs.get<int, float>();
