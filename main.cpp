@@ -74,20 +74,34 @@ public:
 	}
 
 	template<class T>
-	std::vector<std::vector<T>*> get()
+	void get_impl(std::vector<std::vector<T>*>& out)
 	{
-		std::vector<std::vector<T>*> ret;
 		typeId neededType = type_id<T>();
 		for (auto& desc : archetypes)
 		{
 			if (std::find(desc.containedTypes.begin(), desc.containedTypes.end(), neededType) != desc.containedTypes.end())
 			{
 				auto v = static_cast<std::vector<T>*>(desc.archetype->getComponent(neededType));
-				if (v) ret.push_back(v);
+				if (v) out.push_back(v);
 			}
 		}
+	}
+
+	template<class T, class ...Ts>
+	void get_impl(std::vector<std::vector<T>*>& out, std::vector<std::vector<Ts>*>&... restOut)
+	{
+		get_impl<T>(out);
+		get_impl<Ts...>(restOut...);
+	}
+
+	template<class ...Ts> 
+	std::tuple<std::vector<std::vector<Ts>*>...> get()
+	{
+		std::tuple<std::vector<std::vector<Ts>*>...> ret = {};
+		std::apply([&](auto& ...x) { get_impl(x...); }, ret);
 		return ret;
 	}
+
 
 	std::vector<ArchetypeDesc> archetypes;
 };
@@ -96,9 +110,10 @@ int main()
 {
 	Ecs ecs;
 	ecs.registerArchetype<int, float>();
+	ecs.registerArchetype<double, float>();
 	ecs.registerArchetype<int, double>();
 
-	auto a = ecs.get<int>();
+	auto a = ecs.get<int, float>();
 
 	return 0;
 }
