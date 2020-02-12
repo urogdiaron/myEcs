@@ -6,6 +6,7 @@
 /// TYPES
 
 using typeId = size_t;
+using entity = size_t;
 
 template<typename T>
 struct type_helper { static void id() { } };
@@ -17,16 +18,11 @@ template<class ...Ts>
 std::vector<typeId> getTypes() {
 	std::vector<typeId> ret{ type_id<Ts>()... };
 	std::sort(ret.begin(), ret.end());
+	ret.erase(std::unique(ret.begin(), ret.end()), ret.end());
 	return ret;
 }
 
 //////////////////////////////////////////////////////////////////////////
-
-class IArchetype
-{
-public:
-	virtual void* getComponent(typeId t) = 0;
-};
 
 template<class T>
 void filterComponent(std::vector<T>& v, typeId t, void*& ret)
@@ -35,12 +31,20 @@ void filterComponent(std::vector<T>& v, typeId t, void*& ret)
 		ret = &v;
 }
 
+class IArchetype
+{
+public:
+	virtual void* getComponent(typeId t) = 0;
+	virtual void add(entity id) = 0;
+};
+
 template<class ...Ts>
 class Archetype : public IArchetype
 {
 public:
 	Archetype(int capacity)
 	{
+		entities.reserve(capacity);
 		auto reserveVector = [capacity](auto&& x) { x.reserve(capacity); };
 		std::apply([&](auto& ...x) {(reserveVector(x), ...); }, components);
 	}
@@ -52,6 +56,24 @@ public:
 		return ret;
 	}
 
+	void add(entity id) override
+	{
+		entities.push_back(id);
+		auto addToVector = [](auto&& x) { x.emplace_back(); };
+		std::apply([&](auto& ...x) {(addToVector(x), ...); }, components);
+	}
+
+	void set(entity id, Ts... values)
+	{
+		auto it = std::find(entities.begin(), entities.end(), id);
+		if (it == entities.end())
+			return;
+
+		size_t index = it - entities.begin();
+		//...
+	}
+
+	std::vector<entity> entities;
 	std::tuple<std::vector<Ts>...> components;
 };
 
@@ -65,12 +87,32 @@ public:
 	};
 
 	template<class ...Ts>
-	void registerArchetype()
+	IArchetype* getArchetype()
 	{
-		ArchetypeDesc desc;
-		desc.archetype = new Archetype<Ts...>(256);
-		desc.containedTypes = getTypes<Ts...>();
-		archetypes.push_back(desc);
+		auto typeIds = getTypes<Ts...>();
+
+		for (auto& desc : archetypes)
+		{
+			if(desc.containedTypes == typeIds)
+				return desc.archetype;
+		}
+
+		return nullptr;
+	}
+
+	template<class ...Ts>
+	IArchetype* registerArchetype()
+	{
+		IArchetype* ret = getArchetype<Ts...>();
+		if (!ret)
+		{
+			ArchetypeDesc desc;
+			desc.archetype = new Archetype<Ts...>(256);
+			desc.containedTypes = getTypes<Ts...>();
+			archetypes.push_back(desc);
+			ret = desc.archetype;
+		}
+		return ret;
 	}
 
 	template<class T>
@@ -111,18 +153,65 @@ public:
 		return ret;
 	}
 
+	template<class ...Ts>
+	entity add()
+	{
+		IArchetype* arch = registerArchetype<Ts...>();
+		entity newId = nextEntityId++;
+		arch->add(newId);
+		return newId;
+	}
+
+	template<class ...Ts>
+	entity add(Ts... defaultValues)
+	{
+		IArchetype* arch = registerArchetype<Ts...>();
+		entity newId = nextEntityId++;
+		arch->add(newId);
+
+		static_cast<Archetype<Ts...>*>(arch)->set
+
+		return newId;
+	}
 
 	std::vector<ArchetypeDesc> archetypes;
+	entity nextEntityId = 1;
 };
+
+//////////////////////////////////////////////////////////////////////////
+/// TESTS
+
+struct position { float x = 0; float y = 0; };
+struct velocity { float x = 0; float y = 0; };
+struct health { float hp = 100; };
 
 int main()
 {
 	Ecs ecs;
-	ecs.registerArchetype<int, float>();
-	ecs.registerArchetype<double, float, int>();
-	ecs.registerArchetype<int, double>();
 
-	auto a = ecs.get<int, float>();
+	ecs.add<position>();
+	ecs.add<position>();
+	ecs.add<position>();
+
+	ecs.add<position, velocity>();
+	ecs.add<velocity, position>();
+	ecs.add<velocity, position, velocity>();
+
+	ecs.add<position, health>();
+	ecs.add<position, velocity, health>();
+
+	auto [posVectors, velVectors] = ecs.get<position, velocity>();
+	for (size_t iVec = 0; iVec < posVectors.size(); iVec++)
+	{
+		for (size_t i = 0; i < posVectors[iVec]->size(); i++)
+		{
+			auto& pos = (*posVectors[iVec])[i];
+			auto& vel = (*velVectors[iVec])[i];
+
+			pos.x += vel.x;
+			pos.y += vel.y;
+		}
+	}
 
 	return 0;
 }
