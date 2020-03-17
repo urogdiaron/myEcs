@@ -123,6 +123,15 @@
   <ItemGroup>
     <ClCompile Include="main.cpp" />
   </ItemGroup>
+  <ItemGroup>
+    <ClInclude Include="archetype.h" />
+    <ClInclude Include="component_array.h" />
+    <ClInclude Include="ecs.h" />
+    <ClInclude Include="ecs_util.h" />
+    <ClInclude Include="entitycommand.h" />
+    <ClInclude Include="self_register.h" />
+    <ClInclude Include="view.h" />
+  </ItemGroup>
   <Import Project="$(VCTargetsPath)\Microsoft.Cpp.targets" />
   <ImportGroup Label="ExtensionTargets">
   </ImportGroup>

@@ -19,4 +19,27 @@
       <Filter>Source Files</Filter>
     </ClCompile>
   </ItemGroup>
+  <ItemGroup>
+    <ClInclude Include="self_register.h">
+      <Filter>Source Files</Filter>
+    </ClInclude>
+    <ClInclude Include="ecs_util.h">
+      <Filter>Source Files</Filter>
+    </ClInclude>
+    <ClInclude Include="component_array.h">
+      <Filter>Source Files</Filter>
+    </ClInclude>
+    <ClInclude Include="archetype.h">
+      <Filter>Source Files</Filter>
+    </ClInclude>
+    <ClInclude Include="ecs.h">
+      <Filter>Source Files</Filter>
+    </ClInclude>
+    <ClInclude Include="view.h">
+      <Filter>Source Files</Filter>
+    </ClInclude>
+    <ClInclude Include="entitycommand.h">
+      <Filter>Source Files</Filter>
+    </ClInclude>
+  </ItemGroup>
 </Project>
