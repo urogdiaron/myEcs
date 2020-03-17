@@ -15,7 +15,7 @@ namespace ecs
 	template<class T>
 	void deleteFromVectorUnsorted(std::vector<T>& v, int index)
 	{
-		if (v.size() - 1 > index)
+		if ((int)v.size() - 1 > index)
 		{
 			std::swap(v[index], *(--v.end()));
 		}

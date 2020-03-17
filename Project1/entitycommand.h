@@ -15,7 +15,11 @@ namespace ecs
 			, types(types)
 		{}
 
-		void execute(struct Ecs& ecs) override {}
+		void execute(Ecs& ecs) override
+		{
+			entityId newId = ecs.createEntity(types);
+			ecs.temporaryEntityIdRemapping_[temporaryId] = newId;
+		}
 
 		entityId temporaryId;
 		std::vector<typeId> types;
@@ -27,7 +31,15 @@ namespace ecs
 			: id(id)
 		{}
 
-		void execute(struct Ecs& ecs) override {}
+		void execute(struct Ecs& ecs) override 
+		{
+			if (id < 0)
+			{
+				id = ecs.temporaryEntityIdRemapping_[id];
+			}
+
+			ecs.deleteEntity(id);
+		}
 
 		entityId id;
 	};
@@ -40,7 +52,17 @@ namespace ecs
 			, data(data)
 		{}
 
-		void execute(struct Ecs& ecs) override {}
+		void execute(struct Ecs& ecs) override
+		{
+			if (id < 0)
+				id = ecs.temporaryEntityIdRemapping_[id];
+
+			auto comp = ecs.getComponent<T>(id);
+			if (comp)
+				*comp = data;
+			else
+				printf("EntityCommand_SetComponent: Component data not found. Id: %d; Type: %s.", id, ecs.getNameByTypeId(type_id<T>()));
+		}
 
 		entityId id;
 		T data;
@@ -53,7 +75,13 @@ namespace ecs
 			, types(types)
 		{}
 
-		void execute(struct Ecs& ecs) override {}
+		void execute(struct Ecs& ecs) override
+		{
+			if (id < 0)
+				id = ecs.temporaryEntityIdRemapping_[id];
+
+			ecs.changeComponents(id, types);
+		}
 
 		entityId id;
 		std::vector<typeId> types;

@@ -94,10 +94,10 @@ namespace ecs
 
 			while (true)
 			{
-				if (requiredTypeIndex >= typeIds.size())
+				if (requiredTypeIndex >= (int)typeIds.size())
 					break;
 
-				if (containedTypeIndex >= containedTypes_.size())
+				if (containedTypeIndex >= (int)containedTypes_.size())
 					break;
 
 				if (containedTypes_[containedTypeIndex] == typeIds[requiredTypeIndex])

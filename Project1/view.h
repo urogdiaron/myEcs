@@ -129,7 +129,16 @@ namespace ecs
 		template<class T>
 		void setComponentData(entityId id, const T& data)
 		{
-			entityCommandBuffer_.push_back(std::make_unique<EntityCommand_SetComponent>(id, data));
+			entityCommandBuffer_.push_back(std::make_unique<EntityCommand_SetComponent<T>>(id, data));
+		}
+
+		void executeCommmandBuffer(Ecs& ecs)
+		{
+			for (auto& itCommand : entityCommandBuffer_)
+			{
+				itCommand->execute(ecs);
+			}
+			ecs.temporaryEntityIdRemapping_.clear();
 		}
 
 		std::vector<std::unique_ptr<EntityCommand>> entityCommandBuffer_;

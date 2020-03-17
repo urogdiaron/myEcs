@@ -79,12 +79,15 @@ void main()
 			// csinalhatnank egy kis local ecs-t itt, ami mindent belerakunk. az execute pedig mergelne az eredetibe
 			ecs::entityId newId = positions.createEntity(ecs::getTypes<pos, hp>());
 			positions.changeComponents(newId, ecs::getTypes<pos, hp, sensor>());
+			positions.setComponentData(newId, pos{ p.x * 2, p.y * 3, p.z * 4 });
 			printf("new object created at id: %d; pos.x: %d\n", id, p.x);
 		}
 	}
+	positions.executeCommmandBuffer(e);
+	e.printArchetypes();
 
 	for (auto& [id, pos, hp] : ecs::View<pos, hp>(e))
 	{
-		printf("id: %d; pos.x: %d; hp: %d\n", id, pos.x, hp.health);
+		printf("id: %d; pos.x: %d; pos.y: %d; pos.z: %d; hp: %d\n", id, pos.x, pos.y, pos.z, hp.health);
 	}
 }

@@ -86,7 +86,7 @@ namespace ecs
 			Archetype* arch = archetypes_[it->second.archetypeIndex].get();
 			arch->deleteEntity(it->second.elementIndex);
 
-			for (int i = it->second.elementIndex; i < arch->entityIds_.size(); i++)
+			for (int i = it->second.elementIndex; i < (int)arch->entityIds_.size(); i++)
 			{
 				entityId changedId = arch->entityIds_[i];
 				auto changedIt = entityDataIndexMap_.find(changedId);
@@ -117,6 +117,16 @@ namespace ecs
 				return it->second;
 
 			return 0;
+		}
+
+		const char* getNameByTypeId(typeId type)
+		{
+			for (auto& it : typeIdsByName_)
+			{
+				if (it.second == type)
+					return it.first.c_str();
+			}
+			return "Unknown type";
 		}
 
 		void changeComponents(entityId id, const std::vector<typeId>& typeIds)
@@ -196,6 +206,7 @@ namespace ecs
 		std::unordered_map<std::string, typeId> typeIdsByName_;
 		std::unordered_map<entityId, entityDataIndex> entityDataIndexMap_;
 		std::vector<std::unique_ptr<Archetype>> archetypes_;
+		std::unordered_map<entityId, entityId> temporaryEntityIdRemapping_;		// for EntityCommand_Create
 		entityId nextEntityId = 1;
 	};
 }
