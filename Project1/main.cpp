@@ -262,10 +262,58 @@ namespace ecs
 
 	struct EntityCommand
 	{
-		enum class Type { CreateEntity, DeleteEntity, ChangeComponents };
-		Type type_;
-		entityId id_;
-		std::vector<typeId> typeIds_;
+		virtual void execute(struct Ecs& ecs) = 0;
+	};
+
+	struct EntityCommand_Create : EntityCommand
+	{
+		EntityCommand_Create(entityId id, const std::vector<typeId>& types)
+			: temporaryId(id)
+			, types(types)
+		{}
+
+		void execute(struct Ecs& ecs) override {}
+
+		entityId temporaryId;
+		std::vector<typeId> types;
+	};
+
+	struct EntityCommand_Delete : EntityCommand
+	{
+		EntityCommand_Delete(entityId id)
+			: id(id)
+		{}
+
+		void execute(struct Ecs& ecs) override {}
+
+		entityId id;
+	};
+
+	template<class T>
+	struct EntityCommand_SetComponent : EntityCommand
+	{
+		EntityCommand_SetComponent(entityId id, const T& data)
+			: id(id)
+			, data(data)
+		{}
+
+		void execute(struct Ecs& ecs) override {}
+
+		entityId id;
+		T data;
+	};
+
+	struct EntityCommand_ChangeComponents : EntityCommand
+	{
+		EntityCommand_ChangeComponents(entityId id, const std::vector<typeId>& types)
+			: id(id)
+			, types(types)
+		{}
+
+		void execute(struct Ecs& ecs) override {}
+
+		entityId id;
+		std::vector<typeId> types;
 	};
 
 	struct Ecs
@@ -452,43 +500,6 @@ namespace ecs
 			}
 		}
 
-		void executeEntityCommandBuffer(std::vector<EntityCommand>& commandBuffer)
-		{
-			for(int i = 0; i < commandBuffer.size(); i++)
-			{
-				auto& cmd = commandBuffer[i];
-				switch (cmd.type_)
-				{
-				case EntityCommand::Type::CreateEntity:
-				{
-					entityId newId = createEntity(cmd.typeIds_);
-					if (cmd.id_ < 0)
-					{
-						for (int j = i + 1; j < commandBuffer.size(); j++)
-						{
-							auto& nextCmd = commandBuffer[j];
-							if (nextCmd.id_ == cmd.id_)
-							{
-								nextCmd.id_ = newId;
-							}
-						}
-					}
-				}
-				break;
-				case EntityCommand::Type::DeleteEntity:
-				{
-					deleteEntity(cmd.id_);
-				}
-				break;
-				case EntityCommand::Type::ChangeComponents:
-				{
-					changeComponents(cmd.id_, cmd.typeIds_);
-				}
-				break;
-				}
-			}
-		}
-
 		struct entityDataIndex
 		{
 			int archetypeIndex;
@@ -608,22 +619,28 @@ namespace ecs
 
 		entityId createEntity(const std::vector<typeId>& types)
 		{
-			entityId newId = -(entityCommandBuffer_.size() + 1);
-			entityCommandBuffer_.push_back(EntityCommand{ EntityCommand::Type::CreateEntity, newId, types });
+			entityId newId = -((int)entityCommandBuffer_.size() + 1);
+			entityCommandBuffer_.push_back(std::make_unique<EntityCommand_Create>(newId, types));
 			return newId;
 		}
 
 		void deleteEntity(entityId id)
 		{
-			entityCommandBuffer_.push_back(EntityCommand{ EntityCommand::Type::DeleteEntity, id, {} });
+			entityCommandBuffer_.push_back(std::make_unique<EntityCommand_Delete>(id));
 		}
 
 		void changeComponents(entityId id, const std::vector<typeId>& types)
 		{
-			entityCommandBuffer_.push_back(EntityCommand{ EntityCommand::Type::ChangeComponents, id, types });
+			entityCommandBuffer_.push_back(std::make_unique<EntityCommand_ChangeComponents>(id, types));
 		}
 
-		std::vector<EntityCommand> entityCommandBuffer_;
+		template<class T>
+		void setComponentData(entityId id, const T& data)
+		{
+			entityCommandBuffer_.push_back(std::make_unique<EntityCommand_SetComponent>(id, data));
+		}
+
+		std::vector<std::unique_ptr<EntityCommand>> entityCommandBuffer_;
 		std::tuple<std::vector<std::vector<entityId>*>, std::vector<std::vector<Ts>*>...> data_;
 	};
 }
@@ -687,15 +704,15 @@ void main()
 	e.printArchetypes();
 
 	ecs::View<pos> positions(e);
-	for (auto& [id, pos] : positions)
+	for (auto& [id, p] : positions)
 	{
-		printf("id: %d; pos.x: %d\n", id, pos.x);
-		if (pos.x > 15)
+		printf("id: %d; pos.x: %d\n", id, p.x);
+		if (p.x > 15)
 		{
 			// csinalhatnank egy kis local ecs-t itt, ami mindent belerakunk. az execute pedig mergelne az eredetibe
 			ecs::entityId newId = positions.createEntity(ecs::getTypes<pos, hp>());
 			positions.changeComponents(newId, ecs::getTypes<pos, hp, sensor>());
-			printf("new object created at id: %d; pos.x: %d\n", id, pos.x);
+			printf("new object created at id: %d; pos.x: %d\n", id, p.x);
 		}
 	}
 
