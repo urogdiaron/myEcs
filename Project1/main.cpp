@@ -33,7 +33,7 @@ void main()
 	e.registerType<pos>("position");
 	e.registerType<hp>("health");
 	e.registerType<sensor>("sensor");
-
+	
 	std::vector<ecs::typeId> ph = { e.getTypeIdByName("position"), e.getTypeIdByName("health") };
 	std::sort(ph.begin(), ph.end());
 	
@@ -42,8 +42,8 @@ void main()
 
 	for (int i = 0; i < 5; i++)
 	{
-		e.createEntity(ph);
-		e.createEntity(ps);
+		e.createEntity<pos, hp>();// (pos{ 100, 0, 0 }, hp{ 0 });
+		e.createEntity(sensor{ 5.0f });
 	}
 
 	for (auto& [id, pos] : ecs::View<pos>(e))
@@ -76,7 +76,6 @@ void main()
 		printf("id: %d; pos.x: %d\n", id, p.x);
 		if (p.x > 15)
 		{
-			// csinalhatnank egy kis local ecs-t itt, ami mindent belerakunk. az execute pedig mergelne az eredetibe
 			ecs::entityId newId = positions.createEntity(ecs::getTypes<pos, hp>());
 			positions.changeComponents(newId, ecs::getTypes<pos, hp, sensor>());
 			positions.setComponentData(newId, pos{ p.x * 2, p.y * 3, p.z * 4 });

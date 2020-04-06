@@ -7,11 +7,11 @@ namespace ecs
 	struct Archetype
 	{
 		Archetype() {}
-		Archetype(const std::vector<typeId>& typeIds)
+		Archetype(const std::vector<typeId>& typeIds, const ComponentArrayFactory& componentFactory)
 		{
 			for (auto& t : typeIds)
 			{
-				addType(t);
+				addType(t, componentFactory);
 			}
 		}
 
@@ -26,18 +26,18 @@ namespace ecs
 		}
 
 		template<class T>
-		bool add()
+		bool add(const ComponentArrayFactory& componentFactory)
 		{
-			return addType(type_id<T>());
+			return addType(type_id<T>(), componentFactory);
 		}
 
-		bool addType(typeId tid)
+		bool addType(typeId tid, const ComponentArrayFactory& componentFactory)
 		{
 			auto it = componentArrays_.find(tid);
 			if (it != componentArrays_.end())
 				return false;
 
-			componentArrays_[tid] = ComponentFactory::create(tid);
+			componentArrays_[tid] = componentFactory.create(tid);
 
 			containedTypes_.push_back(tid);
 			std::sort(containedTypes_.begin(), containedTypes_.end());
@@ -47,7 +47,7 @@ namespace ecs
 
 		int createEntity(entityId id)
 		{
-			int newIndex = entityIds_.size();
+			int newIndex = (int)entityIds_.size();
 			entityIds_.push_back(id);
 			for (auto& it : componentArrays_)
 			{
@@ -81,7 +81,7 @@ namespace ecs
 				}
 			}
 
-			int newIndex = entityIds_.size();
+			int newIndex = (int)entityIds_.size();
 			entityIds_.push_back(id);
 			return newIndex;
 		}

@@ -5,6 +5,13 @@ namespace ecs
 {
 	struct Ecs
 	{
+	private:
+		template<typename...>
+		friend struct View;
+		
+		friend struct EntityCommand_Create;
+
+
 		template<class T>
 		void get_impl(const std::vector<typeId>& typeIds, std::vector<std::vector<T>*>& out)
 		{
@@ -14,6 +21,9 @@ namespace ecs
 				{
 					continue;
 				}
+
+				if (itArchetype->entityIds_.size() == 0)
+					continue;
 
 				ComponentArrayBase* componentArray = itArchetype->get(type_id<T>());
 				if (componentArray)
@@ -32,6 +42,9 @@ namespace ecs
 				{
 					continue;
 				}
+
+				if (itArchetype->entityIds_.size() == 0)
+					continue;
 
 				out.push_back(&itArchetype->entityIds_);
 			}
@@ -64,17 +77,41 @@ namespace ecs
 				i++;
 			}
 
-			auto& insertedItem = archetypes_.emplace_back(std::make_unique<Archetype>(typeIds));
+			auto& insertedItem = archetypes_.emplace_back(std::make_unique<Archetype>(typeIds, componentArrayFactory_));
 			return { i, insertedItem.get() };
 		}
 
-		entityId createEntity(const std::vector<typeId>& typeIds)
+		entityId createEntity_impl(const std::vector<typeId>& typeIds)
 		{
 			entityId newEntityId = nextEntityId++;
 			auto [archIndex, archetype] = createArchetype(typeIds);
 			int elementIndex = archetype->createEntity(newEntityId);
 			entityDataIndexMap_[newEntityId] = { archIndex, elementIndex };
 			return newEntityId;
+		}
+
+	public:
+		template<class T>
+		void setComponent(entityId id, const T& value)
+		{
+			T* comp = getComponent<T>(id);
+			if (comp)
+				*comp = value;
+		}
+
+		template<class ...Ts>
+		entityId createEntity()
+		{
+			entityId ret = createEntity_impl(getTypes<Ts...>());
+			return ret;
+		}
+
+		template<class ...Ts>
+		entityId createEntity(const Ts&... initialValue)
+		{
+			entityId ret = createEntity_impl(getTypes<Ts...>());
+			int tmp[] = {(setComponent(ret, initialValue), 0)...};
+			return ret;
 		}
 
 		bool deleteEntity(entityId id)
@@ -107,7 +144,9 @@ namespace ecs
 			if (it != typeIdsByName_.end())
 				return;		// Multiple registration
 
-			typeIdsByName_[name] = type_id<T>();
+			typeId id = type_id<T>();
+			typeIdsByName_[name] = id;
+			componentArrayFactory_.addFactoryFunction<T>(id);
 		}
 
 		typeId getTypeIdByName(const char* name)
@@ -127,6 +166,27 @@ namespace ecs
 					return it.first.c_str();
 			}
 			return "Unknown type";
+		}
+
+		void deleteComponents(entityId id, const std::vector<typeId>& typeIds)
+		{
+			auto it = entityDataIndexMap_.find(id);
+			if (it == entityDataIndexMap_.end())
+				return;
+
+			Archetype* oldArchetype = archetypes_[it->second.archetypeIndex].get();
+			std::vector<typeId> remainingTypes;
+			remainingTypes.reserve(oldArchetype->containedTypes_.size());
+			for (auto t : oldArchetype->containedTypes_)
+			{
+				auto it = std::find(typeIds.begin(), typeIds.end(), t);
+				if (it == typeIds.end())
+				{
+					remainingTypes.push_back(t);
+				}
+			}
+			
+			changeComponents(id, remainingTypes);
 		}
 
 		void changeComponents(entityId id, const std::vector<typeId>& typeIds)
@@ -162,6 +222,44 @@ namespace ecs
 			}
 
 			return &static_cast<ComponentArray<T>*>(itComponentArray->second.get())->components_[it->second.elementIndex];
+		}
+
+private:
+		template<class T>
+		void getComponents_impl(entityId id, Archetype* archetype, int elementIndex, T*& out)
+		{
+			auto itComponentArray = archetype->componentArrays_.find(type_id<T>());
+			if (itComponentArray == archetype->componentArrays_.end())
+			{
+				out = nullptr;
+				return;
+			}
+
+			out = &static_cast<ComponentArray<T>*>(itComponentArray->second.get())->components_[elementIndex];
+		}
+
+		template<class T, class... Ts>
+		void getComponents_impl(entityId id, Archetype* archetype, int elementIndex, T*& out, Ts*&... restOut)
+		{
+			getComponents_impl(id, archetype, elementIndex, out);
+			getComponents_impl(id, archetype, elementIndex, restOut...);
+		}
+
+
+public:
+
+		template<class... Ts>
+		std::tuple<Ts*...> getComponents(entityId id)
+		{
+			auto it = entityDataIndexMap_.find(id);
+			if (it == entityDataIndexMap_.end())
+				return std::tuple<Ts *...>{};
+
+			Archetype* archetype = archetypes_[it->second.archetypeIndex].get();
+
+			std::tuple<Ts*...> ret = {};
+			std::apply([&](auto& ...x) { getComponents_impl(id, archetype, it->second.elementIndex, x...); }, ret);
+			return ret;
 		}
 
 		void printArchetypes()
@@ -203,6 +301,7 @@ namespace ecs
 			int elementIndex;
 		};
 
+		ComponentArrayFactory componentArrayFactory_;
 		std::unordered_map<std::string, typeId> typeIdsByName_;
 		std::unordered_map<entityId, entityDataIndex> entityDataIndexMap_;
 		std::vector<std::unique_ptr<Archetype>> archetypes_;

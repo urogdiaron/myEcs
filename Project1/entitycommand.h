@@ -17,7 +17,7 @@ namespace ecs
 
 		void execute(Ecs& ecs) override
 		{
-			entityId newId = ecs.createEntity(types);
+			entityId newId = ecs.createEntity_impl(types);
 			ecs.temporaryEntityIdRemapping_[temporaryId] = newId;
 		}
 
@@ -66,6 +66,25 @@ namespace ecs
 
 		entityId id;
 		T data;
+	};
+
+	struct EntityCommand_DeleteComponents : EntityCommand
+	{
+		EntityCommand_DeleteComponents(entityId id, const std::vector<typeId>& types)
+			: id(id)
+			, types(types)
+		{}
+
+		void execute(struct Ecs& ecs) override
+		{
+			if (id < 0)
+				id = ecs.temporaryEntityIdRemapping_[id];
+
+			ecs.deleteComponents(id, types);
+		}
+
+		entityId id;
+		std::vector<typeId> types;
 	};
 
 	struct EntityCommand_ChangeComponents : EntityCommand

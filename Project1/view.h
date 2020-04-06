@@ -121,6 +121,11 @@ namespace ecs
 			entityCommandBuffer_.push_back(std::make_unique<EntityCommand_Delete>(id));
 		}
 
+		void deleteComponents(entityId id, const std::vector<typeId>& types)
+		{
+			entityCommandBuffer_.push_back(std::make_unique<EntityCommand_DeleteComponents>(id, types));
+		}
+
 		void changeComponents(entityId id, const std::vector<typeId>& types)
 		{
 			entityCommandBuffer_.push_back(std::make_unique<EntityCommand_ChangeComponents>(id, types));
@@ -139,6 +144,16 @@ namespace ecs
 				itCommand->execute(ecs);
 			}
 			ecs.temporaryEntityIdRemapping_.clear();
+		}
+
+		size_t getCount() const
+		{
+			size_t count = 0;
+			std::vector<std::vector<entityId>*> entityIdArrays = std::get<0>(data_);
+			for (auto& v : entityIdArrays)
+				count += v->size();
+
+			return count;
 		}
 
 		std::vector<std::unique_ptr<EntityCommand>> entityCommandBuffer_;
