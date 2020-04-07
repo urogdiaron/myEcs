@@ -8,21 +8,23 @@ namespace ecs
 		virtual void execute(struct Ecs& ecs) = 0;
 	};
 
+	template<class ...Ts>
 	struct EntityCommand_Create : EntityCommand
 	{
-		EntityCommand_Create(entityId id, const std::vector<typeId>& types)
+		EntityCommand_Create(entityId id, const Ts&... initialValues)
 			: temporaryId(id)
-			, types(types)
-		{}
+		{
+			args = std::make_tuple(initialValues...);
+		}
 
 		void execute(Ecs& ecs) override
 		{
-			entityId newId = ecs.createEntity_impl(types);
+			entityId newId = std::apply([&](auto... x) { return ecs.createEntity<Ts...>(x...); }, args);
 			ecs.temporaryEntityIdRemapping_[temporaryId] = newId;
 		}
 
 		entityId temporaryId;
-		std::vector<typeId> types;
+		std::tuple<Ts...> args;
 	};
 
 	struct EntityCommand_Delete : EntityCommand

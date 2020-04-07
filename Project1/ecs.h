@@ -9,6 +9,7 @@ namespace ecs
 		template<typename...>
 		friend struct View;
 		
+		template<typename...>
 		friend struct EntityCommand_Create;
 
 

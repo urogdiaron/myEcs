@@ -1,5 +1,6 @@
 #pragma once
 #include <vector>
+#include <string>
 
 namespace ecs
 {
@@ -22,6 +23,11 @@ namespace ecs
 		auto ptr = &type_helper<T>::id;
 		return reinterpret_cast<typeId>(ptr);
 	}
+
+	struct type_desc
+	{
+		std::string name;
+	};
 
 	template<class T>
 	void deleteFromVectorUnsorted(std::vector<T>& v, int index)

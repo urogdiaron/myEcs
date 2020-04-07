@@ -7,9 +7,19 @@ namespace ecs
 	template<class ...Ts>
 	struct View
 	{
-		View(Ecs& ecs)
-			: data_(ecs.get<Ts...>())
+		View(Ecs& ecs, bool autoExecuteCommandBuffer = true)
+			: ecs_(&ecs)
+			, data_(ecs.get<Ts...>())
+			, autoExecuteCommandBuffer_(autoExecuteCommandBuffer)
 		{}
+
+		~View()
+		{
+			if (autoExecuteCommandBuffer_)
+			{
+				executeCommmandBuffer(*ecs_);
+			}
+		}
 
 		struct iterator
 		{
@@ -109,10 +119,11 @@ namespace ecs
 			return iterator();
 		}
 
-		entityId createEntity(const std::vector<typeId>& types)
+		template<class ...Ts>
+		entityId createEntity(const Ts... initialValues)
 		{
 			entityId newId = -((int)entityCommandBuffer_.size() + 1);
-			entityCommandBuffer_.push_back(std::make_unique<EntityCommand_Create>(newId, types));
+			entityCommandBuffer_.push_back(std::make_unique<EntityCommand_Create<Ts...>>(newId, initialValues...));
 			return newId;
 		}
 
@@ -156,7 +167,9 @@ namespace ecs
 			return count;
 		}
 
+		Ecs* ecs_;
 		std::vector<std::unique_ptr<EntityCommand>> entityCommandBuffer_;
 		std::tuple<std::vector<std::vector<entityId>*>, std::vector<std::vector<Ts>*>...> data_;
+		bool autoExecuteCommandBuffer_ = true;
 	};
 }
