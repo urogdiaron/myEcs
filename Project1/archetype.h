@@ -7,7 +7,7 @@ namespace ecs
 	struct Archetype
 	{
 		Archetype() {}
-		Archetype(const std::vector<typeId>& typeIds, const ComponentArrayFactory& componentFactory)
+		Archetype(const typeIdList& typeIds, const ComponentArrayFactory& componentFactory)
 		{
 			for (auto& t : typeIds)
 			{
@@ -86,7 +86,7 @@ namespace ecs
 			return newIndex;
 		}
 
-		bool hasAllComponents(const std::vector<typeId>& typeIds) const
+		bool hasAllComponents(const typeIdList& typeIds) const
 		{
 			int requiredTypeIndex = 0;
 			int containedTypeIndex = 0;
@@ -115,7 +115,7 @@ namespace ecs
 			return foundCount == typeIds.size();
 		}
 
-		std::vector<typeId> containedTypes_;
+		typeIdList containedTypes_;
 		std::vector<entityId> entityIds_;
 		std::unordered_map<typeId, std::unique_ptr<ComponentArrayBase>> componentArrays_;
 	};

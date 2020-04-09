@@ -1,11 +1,21 @@
 #pragma once
 #include <vector>
 #include <string>
+#include <utility>
 
 namespace ecs
 {
 	using entityId = int;
 	using typeId = size_t;
+
+	struct typeIdList : std::vector<typeId>
+	{
+		typeIdList() = default;
+		typeIdList(std::initializer_list<typeId> l)
+			: std::vector<typeId>(l)
+		{
+		}
+	};
 
 	template<typename T>
 	struct type_helper { 
@@ -47,9 +57,20 @@ namespace ecs
 	}
 
 	template<class ...Ts>
-	std::vector<typeId> getTypes() {
-		std::vector<typeId> ret{ type_id<Ts>()... };
+	const typeIdList& getTypes() {
+#if 0
+		typeIdList ret{ type_id<Ts>()... };
 		makeVectorUniqueAndSorted(ret);
 		return ret;
+#else
+		static bool needsSort = true;
+		static typeIdList ret{ type_id<Ts>()... };
+		if (needsSort)
+		{
+			makeVectorUniqueAndSorted(ret);
+			needsSort = false;
+		}
+		return ret;
+#endif
 	}
 }

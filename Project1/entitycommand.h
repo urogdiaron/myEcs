@@ -72,7 +72,7 @@ namespace ecs
 
 	struct EntityCommand_DeleteComponents : EntityCommand
 	{
-		EntityCommand_DeleteComponents(entityId id, const std::vector<typeId>& types)
+		EntityCommand_DeleteComponents(entityId id, const typeIdList& types)
 			: id(id)
 			, types(types)
 		{}
@@ -86,12 +86,12 @@ namespace ecs
 		}
 
 		entityId id;
-		std::vector<typeId> types;
+		typeIdList types;
 	};
 
 	struct EntityCommand_ChangeComponents : EntityCommand
 	{
-		EntityCommand_ChangeComponents(entityId id, const std::vector<typeId>& types)
+		EntityCommand_ChangeComponents(entityId id, const typeIdList& types)
 			: id(id)
 			, types(types)
 		{}
@@ -105,6 +105,6 @@ namespace ecs
 		}
 
 		entityId id;
-		std::vector<typeId> types;
+		typeIdList types;
 	};
 }
