@@ -136,6 +136,8 @@ namespace ecs
 				}
 			}
 
+			entityDataIndexMap_.erase(it);
+
 			return true;
 		}
 
@@ -209,6 +211,22 @@ namespace ecs
 			int newElementIndex = archetype->copyFromEntity(id, it->second.elementIndex, oldArchetype);
 			deleteEntity(id);
 			entityDataIndexMap_[id] = { archIndex, newElementIndex };
+		}
+
+		template<class T>
+		bool hasComponent(entityId id) const
+		{
+			auto it = entityDataIndexMap_.find(id);
+			if (it == entityDataIndexMap_.end())
+				return false;
+
+			auto itComponentArray = archetypes_[it->second.archetypeIndex]->componentArrays_.find(type_id<T>());
+			if (itComponentArray == archetypes_[it->second.archetypeIndex]->componentArrays_.end())
+			{
+				return false;
+			}
+
+			return true;
 		}
 
 		template<class T>
