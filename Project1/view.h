@@ -132,14 +132,16 @@ namespace ecs
 			ecs_->entityCommandBuffer_.push_back(std::make_unique<EntityCommand_Delete>(id));
 		}
 
-		void deleteComponents(entityId id, const typeIdList& types)
+		template<class... Ts>
+		void deleteComponents(entityId id)
 		{
-			ecs_->entityCommandBuffer_.push_back(std::make_unique<EntityCommand_DeleteComponents>(id, types));
+			ecs_->entityCommandBuffer_.push_back(std::make_unique<EntityCommand_DeleteComponents>(id, ecs_->getTypeIds<Ts...>()));
 		}
 
-		void changeComponents(entityId id, const typeIdList& types)
+		template<class... Ts>
+		void changeComponents(entityId id)
 		{
-			ecs_->entityCommandBuffer_.push_back(std::make_unique<EntityCommand_ChangeComponents>(id, types));
+			ecs_->entityCommandBuffer_.push_back(std::make_unique<EntityCommand_ChangeComponents>(id, ecs_->getTypeIds<Ts...>()));
 		}
 
 		template<class T>

@@ -12,7 +12,6 @@ namespace ecs
 		template<typename...>
 		friend struct EntityCommand_Create;
 
-
 		template<class T>
 		void get_impl(const typeIdList& typeIds, std::vector<std::vector<T>*>& out)
 		{
@@ -27,7 +26,7 @@ namespace ecs
 				if (itArchetype->entityIds_.size() == 0)
 					continue;
 
-				ComponentArrayBase* componentArray = itArchetype->get(type_id<T>());
+				ComponentArrayBase* componentArray = itArchetype->get(getTypeId<T>());
 				if (componentArray)
 				{
 					out.push_back(&static_cast<ComponentArray<T>*>(componentArray)->components_);
@@ -64,7 +63,7 @@ namespace ecs
 		const std::tuple<std::vector<std::vector<entityId>*>, std::vector<std::vector<Ts>*>...>& get()
 		{
 			static std::tuple<std::vector<std::vector<entityId>*>, std::vector<std::vector<Ts>*>...> ret = {};
-			std::apply([&](auto& ...x) { get_impl(getTypes<Ts...>(), x...); }, ret);
+			std::apply([&](auto& ...x) { get_impl(getTypeIds<Ts...>(), x...); }, ret);
 			return ret;
 		}
 
@@ -92,8 +91,45 @@ namespace ecs
 			entityDataIndexMap_[newEntityId] = { archIndex, elementIndex };
 			return newEntityId;
 		}
-
 	public:
+		template<class T>
+		typeId getTypeId() const
+		{
+			static size_t typeIndex = typeDescriptors_.size();
+			if (typeDescriptors_.size() > typeIndex)
+				return typeDescriptors_[typeIndex].get();
+			return nullptr;
+		}
+
+		template<class... Ts>
+		const typeIdList& getTypeIds() const
+		{
+			static bool needsSort = true;
+			static typeIdList ret{ getTypeId<Ts>()... };
+			if (needsSort)
+			{
+				makeVectorUniqueAndSorted(ret);
+				needsSort = false;
+			}
+			return ret;
+		}
+
+		template<class T>
+		void registerType(const char* name)
+		{
+			typeId oldTypeId = getTypeId<T>();
+			if (oldTypeId)
+			{
+				printf("Component \"%s\" is already registered!", name);
+				return;
+			}
+
+			auto& typeDesc = typeDescriptors_.emplace_back(std::make_unique<TypeDescriptor>());
+			typeDesc->index = (int)typeDescriptors_.size() - 1;
+			typeDesc->name = name;
+			componentArrayFactory_.addFactoryFunction<T>(typeDesc.get());
+		}
+
 		template<class T>
 		void setComponent(entityId id, const T& value)
 		{
@@ -105,14 +141,14 @@ namespace ecs
 		template<class ...Ts>
 		entityId createEntity()
 		{
-			entityId ret = createEntity_impl(getTypes<Ts...>());
+			entityId ret = createEntity_impl(getTypeIds<Ts...>());
 			return ret;
 		}
 
 		template<class ...Ts>
 		entityId createEntity(const Ts&... initialValue)
 		{
-			entityId ret = createEntity_impl(getTypes<Ts...>());
+			entityId ret = createEntity_impl(getTypeIds<Ts...>());
 			int tmp[] = {(setComponent(ret, initialValue), 0)...};
 			return ret;
 		}
@@ -139,38 +175,6 @@ namespace ecs
 			entityDataIndexMap_.erase(it);
 
 			return true;
-		}
-
-		template<class T>
-		void registerType(const char* name)
-		{
-			ComponentArray<T>::getKey(); // Just to make sure that the selfRegistering code gets generated
-			auto it = typeIdsByName_.find(name);
-			if (it != typeIdsByName_.end())
-				return;		// Multiple registration
-
-			typeId id = type_id<T>();
-			typeIdsByName_[name] = id;
-			componentArrayFactory_.addFactoryFunction<T>(id);
-		}
-
-		typeId getTypeIdByName(const char* name)
-		{
-			auto it = typeIdsByName_.find(name);
-			if (it != typeIdsByName_.end())
-				return it->second;
-
-			return 0;
-		}
-
-		const char* getNameByTypeId(typeId type)
-		{
-			for (auto& it : typeIdsByName_)
-			{
-				if (it.second == type)
-					return it.first.c_str();
-			}
-			return "Unknown type";
 		}
 
 		void deleteComponents(entityId id, const typeIdList& typeIds)
@@ -220,7 +224,7 @@ namespace ecs
 			if (it == entityDataIndexMap_.end())
 				return false;
 
-			auto itComponentArray = archetypes_[it->second.archetypeIndex]->componentArrays_.find(type_id<T>());
+			auto itComponentArray = archetypes_[it->second.archetypeIndex]->componentArrays_.find(getTypeId<T>());
 			if (itComponentArray == archetypes_[it->second.archetypeIndex]->componentArrays_.end())
 			{
 				return false;
@@ -236,7 +240,7 @@ namespace ecs
 			if (it == entityDataIndexMap_.end())
 				return nullptr;
 
-			auto itComponentArray = archetypes_[it->second.archetypeIndex]->componentArrays_.find(type_id<T>());
+			auto itComponentArray = archetypes_[it->second.archetypeIndex]->componentArrays_.find(getTypeId<T>());
 			if (itComponentArray == archetypes_[it->second.archetypeIndex]->componentArrays_.end())
 			{
 				return nullptr;
@@ -249,7 +253,7 @@ private:
 		template<class T>
 		void getComponents_impl(entityId id, Archetype* archetype, int elementIndex, T*& out)
 		{
-			auto itComponentArray = archetype->componentArrays_.find(type_id<T>());
+			auto itComponentArray = archetype->componentArrays_.find(getTypeId<T>());
 			if (itComponentArray == archetype->componentArrays_.end())
 			{
 				out = nullptr;
@@ -285,16 +289,6 @@ public:
 
 		void printArchetypes()
 		{
-			auto fnGetTypeNameById = [&](typeId id) -> const char*
-			{
-				for (auto& it : typeIdsByName_)
-				{
-					if (it.second == id)
-						return it.first.c_str();
-				}
-				return "";
-			};
-
 			int i = 0;
 			for (auto& arch : archetypes_)
 			{
@@ -302,7 +296,7 @@ public:
 				printf("Types: ");
 				for (auto type : arch->containedTypes_)
 				{
-					printf("%s, ", fnGetTypeNameById(type));
+					printf("%s, ", type->name.c_str());
 				}
 				printf("\n");
 
@@ -323,7 +317,7 @@ public:
 		};
 
 		ComponentArrayFactory componentArrayFactory_;
-		std::unordered_map<std::string, typeId> typeIdsByName_;
+		std::vector<std::unique_ptr<TypeDescriptor>> typeDescriptors_;	// we store pointers so the raw TypeDescriptor* will stay stable for sure
 		std::unordered_map<entityId, entityDataIndex> entityDataIndexMap_;
 		std::vector<std::unique_ptr<Archetype>> archetypes_;
 		std::vector<std::unique_ptr<struct EntityCommand>> entityCommandBuffer_;

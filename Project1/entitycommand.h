@@ -63,7 +63,7 @@ namespace ecs
 			if (comp)
 				*comp = data;
 			else
-				printf("EntityCommand_SetComponent: Component data not found. Id: %d; Type: %s.", id, ecs.getNameByTypeId(type_id<T>()));
+				printf("EntityCommand_SetComponent: Component data not found. Id: %d; Type: %s.", id, ecs.getTypeId<T>()->name.c_str());
 		}
 
 		entityId id;

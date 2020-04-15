@@ -33,12 +33,6 @@ void main()
 	e.registerType<pos>("position");
 	e.registerType<hp>("health");
 	e.registerType<sensor>("sensor");
-	
-	std::vector<ecs::typeId> ph = { e.getTypeIdByName("position"), e.getTypeIdByName("health") };
-	std::sort(ph.begin(), ph.end());
-	
-	std::vector<ecs::typeId> ps = { e.getTypeIdByName("position"), e.getTypeIdByName("sensor") };
-	std::sort(ps.begin(), ps.end());
 
 	for (int i = 0; i < 5; i++)
 	{
@@ -66,7 +60,7 @@ void main()
 	printf("entity #7 is deleted\n");
 
 	e.printArchetypes();
-	e.changeComponents(2, { e.getTypeIdByName("position"), e.getTypeIdByName("health") });
+	//e.changeComponents(2, { e.getTypeIdByName("position"), e.getTypeIdByName("health") });
 	printf("entity #2 sensor deleted and health added\n");
 	e.printArchetypes();
 
@@ -76,13 +70,13 @@ void main()
 		printf("id: %d; pos.x: %d\n", id, p.x);
 		if (p.x > 15)
 		{
-			ecs::entityId newId = positions.createEntity(ecs::getTypes<pos, hp>());
-			positions.changeComponents(newId, ecs::getTypes<pos, hp, sensor>());
+			ecs::entityId newId = positions.createEntity<pos, hp>({}, {});
+			//positions.changeComponents(newId, ecs::getTypes<pos, hp, sensor>());
 			positions.setComponentData(newId, pos{ p.x * 2, p.y * 3, p.z * 4 });
 			printf("new object created at id: %d; pos.x: %d\n", id, p.x);
 		}
 	}
-	positions.executeCommmandBuffer(e);
+	positions.executeCommmandBuffer();
 	e.printArchetypes();
 
 	for (auto& [id, pos, hp] : ecs::View<pos, hp>(e))

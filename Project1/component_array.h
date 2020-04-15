@@ -6,19 +6,20 @@ namespace ecs
 {
 	struct ComponentArrayBase
 	{
+		ComponentArrayBase(typeId tid) : tid(tid) {}
 		virtual ~ComponentArrayBase() {}
-		virtual typeId getTypeId() const = 0;
 		virtual void createEntity() = 0;
 		virtual void deleteEntity(int elementIndex) = 0;
 		virtual void copyFromArray(int sourceElementIndex, const ComponentArrayBase* sourceArray) = 0;
+		typeId getTypeId() { return tid; }
+	private:
+		typeId tid;
 	};
 
 	template<class T>
 	struct ComponentArray : public ComponentArrayBase
 	{
-		static typeId getKey() { return type_id<T>(); }
-
-		typeId getTypeId() const override { return type_id<T>(); }
+		ComponentArray(typeId tid) : ComponentArrayBase(tid) {}
 
 		void createEntity() override
 		{
@@ -53,9 +54,9 @@ namespace ecs
 		void addFactoryFunction(const typeId& componentId)
 		{
 			std::function<std::unique_ptr<ComponentArrayBase>()> fn;
-			fn = []()
+			fn = [componentId]()
 			{
-				return std::make_unique<ComponentArray<T>>();
+				return std::make_unique<ComponentArray<T>>(componentId);
 			};
 
 			factoryFunctions[componentId] = fn;
