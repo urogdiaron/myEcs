@@ -46,6 +46,7 @@ void main()
 	}
 
 	for (auto& [id, pos, hp] : ecs::View<pos, hp>(e))
+
 	{
 		printf("id: %d; pos.x: %d; hp: %d\n", id, pos.x, hp.health);
 	}

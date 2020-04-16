@@ -86,29 +86,43 @@ namespace ecs
 			return newIndex;
 		}
 
-		bool hasAllComponents(const typeIdList& typeIds) const
+		bool hasAllComponents(const typeQueryList& typeIds) const
 		{
-			int requiredTypeIndex = 0;
+			int queryIndex = 0;
 			int containedTypeIndex = 0;
 			int foundCount = 0;
 
 			while (true)
 			{
-				if (requiredTypeIndex >= (int)typeIds.size())
+				if (queryIndex >= (int)typeIds.size())
 					break;
 
 				if (containedTypeIndex >= (int)containedTypes_.size())
 					break;
 
-				if (containedTypes_[containedTypeIndex] == typeIds[requiredTypeIndex])
+				if (typeIds[queryIndex].mode == TypeQueryItem::Exclude)
 				{
-					requiredTypeIndex++;
-					containedTypeIndex++;
-					foundCount++;
+					if (containedTypes_[containedTypeIndex] == typeIds[queryIndex].type)
+					{
+						return false;
+					}
+					else if (containedTypes_[containedTypeIndex] > typeIds[queryIndex].type)
+					{
+						queryIndex++;
+					}
 				}
 				else
 				{
-					containedTypeIndex++;
+					if (containedTypes_[containedTypeIndex] == typeIds[queryIndex].type)
+					{
+						queryIndex++;
+						containedTypeIndex++;
+						foundCount++;
+					}
+					else
+					{
+						containedTypeIndex++;
+					}
 				}
 			}
 

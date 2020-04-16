@@ -25,6 +25,15 @@ namespace ecs
 		}
 	};
 
+	struct TypeQueryItem
+	{
+		enum Mode { Read, Write, Exclude, Required };
+		typeId type;
+		Mode mode;
+	};
+
+	using typeQueryList = std::vector<TypeQueryItem>;
+
 	template<class T>
 	void deleteFromVectorUnsorted(std::vector<T>& v, int index)
 	{

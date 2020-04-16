@@ -13,7 +13,7 @@ namespace ecs
 		friend struct EntityCommand_Create;
 
 		template<class T>
-		void get_impl(const typeIdList& typeIds, std::vector<std::vector<T>*>& out)
+		void get_impl(const typeQueryList& typeIds, std::vector<std::vector<T>*>& out)
 		{
 			out.clear();
 			for (auto& itArchetype : archetypes_)
@@ -35,7 +35,7 @@ namespace ecs
 		}
 
 		template<>
-		void get_impl(const typeIdList& typeIds, std::vector<std::vector<entityId>*>& out)
+		void get_impl(const typeQueryList& typeIds, std::vector<std::vector<entityId>*>& out)
 		{
 			out.clear();
 			for (auto& itArchetype : archetypes_)
@@ -53,18 +53,42 @@ namespace ecs
 		}
 
 		template<class T, class ...Ts>
-		void get_impl(const typeIdList& typeIds, std::vector<std::vector<T>*>& out, std::vector<std::vector<Ts>*>&... restOut)
+		void get_impl(const typeQueryList& typeIds, std::vector<std::vector<T>*>& out, std::vector<std::vector<Ts>*>&... restOut)
 		{
 			get_impl(typeIds, out);
 			get_impl(typeIds, restOut...);
 		}
 
 		template<class ...Ts>
-		const std::tuple<std::vector<std::vector<entityId>*>, std::vector<std::vector<Ts>*>...>& get()
+		const std::tuple<std::vector<std::vector<entityId>*>, std::vector<std::vector<std::decay_t<Ts>>*>...>& get(const typeQueryList& typeIds)
 		{
-			static std::tuple<std::vector<std::vector<entityId>*>, std::vector<std::vector<Ts>*>...> ret = {};
-			std::apply([&](auto& ...x) { get_impl(getTypeIds<Ts...>(), x...); }, ret);
+			static std::tuple<std::vector<std::vector<entityId>*>, std::vector<std::vector<std::decay_t<Ts>>*>...> ret = {};
+			std::apply([&](auto& ...x) { get_impl(typeIds, x...); }, ret);
 			return ret;
+		}
+
+		template<class T>
+		int buildTypeQueryList_impl(typeQueryList& inOut, TypeQueryItem::Mode mode) const
+		{
+			TypeQueryItem newItem;
+			newItem.type = getTypeId<T>();
+			newItem.mode = mode;
+			if (mode == TypeQueryItem::Write)
+			{
+				if constexpr (std::is_const<T>::value)
+				{
+					newItem.mode = TypeQueryItem::Read;
+				}
+			}
+			inOut.push_back(newItem);
+			return 0;
+		}
+
+		template<class ...Ts>
+		void buildTypeQueryList(typeQueryList& inOut, TypeQueryItem::Mode mode) const
+		{
+			auto tmp = { buildTypeQueryList_impl<Ts>(inOut, mode)..., 0 };
+			std::sort(inOut.begin(), inOut.end(), [](const TypeQueryItem& a, const TypeQueryItem& b) -> int { return a.type < b.type; });
 		}
 
 		std::tuple<int, Archetype*> createArchetype(const typeIdList& typeIds)
@@ -91,14 +115,19 @@ namespace ecs
 			entityDataIndexMap_[newEntityId] = { archIndex, elementIndex };
 			return newEntityId;
 		}
-	public:
 		template<class T>
-		typeId getTypeId() const
+		typeId getTypeId_impl() const
 		{
 			static size_t typeIndex = typeDescriptors_.size();
 			if (typeDescriptors_.size() > typeIndex)
 				return typeDescriptors_[typeIndex].get();
 			return nullptr;
+		}
+
+		template<class T>
+		typeId getTypeId() const
+		{
+			return getTypeId_impl<std::decay_t<T>>();
 		}
 
 		template<class... Ts>
@@ -113,6 +142,7 @@ namespace ecs
 			}
 			return ret;
 		}
+	public:
 
 		template<class T>
 		void registerType(const char* name)

@@ -7,11 +7,14 @@ namespace ecs
 	template<class ...Ts>
 	struct View
 	{
+		friend struct iterator;
+
 		View(Ecs& ecs, bool autoExecuteCommandBuffer = true)
 			: ecs_(&ecs)
-			, data_(ecs.get<Ts...>())
 			, autoExecuteCommandBuffer_(autoExecuteCommandBuffer)
-		{}
+		{
+			ecs.buildTypeQueryList<Ts...>(typeQueryList, TypeQueryItem::Write);
+		}
 
 		~View()
 		{
@@ -21,13 +24,35 @@ namespace ecs
 			}
 		}
 
+		template <class ...Cs>
+		View& with()
+		{
+			ecs_->buildTypeQueryList<Cs...>(typeQueryList, TypeQueryItem::Required);
+			return *this;
+		}
+
+		template <class ...Cs>
+		View& exclude()
+		{
+			ecs_->buildTypeQueryList<Cs...>(typeQueryList, TypeQueryItem::Excluded);
+			return *this;
+		}
+
+	private:
+		void initializeData()
+		{
+			if(!data_)
+				data_ = &ecs_->get<Ts...>(typeQueryList);
+		}
+	public:
 		struct iterator
 		{
 			iterator() = default;
 
 			iterator(View* v) : view(v)
 			{
-				auto& entityIds = std::get<std::vector<std::vector<entityId>*>>(view->data_);
+				view->initializeData();
+				auto& entityIds = std::get<std::vector<std::vector<entityId>*>>(*view->data_);
 				if (entityIds.size() > 0)
 				{
 					vectorIndex = 0;
@@ -38,7 +63,7 @@ namespace ecs
 
 			iterator& operator++()
 			{
-				auto& entityIds = std::get<std::vector<std::vector<entityId>*>>(view->data_);
+				auto& entityIds = std::get<std::vector<std::vector<entityId>*>>(*view->data_);
 				if ((int)entityIds[vectorIndex]->size() - 1 > elementIndex)
 				{
 					elementIndex++;
@@ -87,7 +112,7 @@ namespace ecs
 			template<class T>
 			void getCurrentTuple_impl(T*& elementOut)
 			{
-				auto& vectors = std::get<std::vector<std::vector<T>*>>(view->data_);
+				auto& vectors = std::get<std::vector<std::vector<std::decay_t<T>>*>>(*view->data_);
 				elementOut = &(*vectors[vectorIndex])[elementIndex];
 			}
 
@@ -164,10 +189,11 @@ namespace ecs
 			ecs_->temporaryEntityIdRemapping_.clear();
 		}
 
-		size_t getCount() const
+		size_t getCount()
 		{
+			initializeData();
 			size_t count = 0;
-			const std::vector<std::vector<entityId>*>& entityIdArrays = std::get<0>(data_);
+			const std::vector<std::vector<entityId>*>& entityIdArrays = std::get<0>(*data_);
 			for (auto& v : entityIdArrays)
 				count += v->size();
 
@@ -175,7 +201,15 @@ namespace ecs
 		}
 
 		Ecs* ecs_;
-		const std::tuple<std::vector<std::vector<entityId>*>, std::vector<std::vector<Ts>*>...>& data_;
+		typeQueryList typeQueryList;
+		const std::tuple<std::vector<std::vector<entityId>*>, std::vector<std::vector<std::decay_t<Ts>>*>...>* data_ = nullptr;
 		bool autoExecuteCommandBuffer_ = true;
+	};
+
+	template<class ...Ts>
+	struct ViewBuilder
+	{
+		Ecs* ecs;
+		
 	};
 }
