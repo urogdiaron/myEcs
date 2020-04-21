@@ -13,7 +13,7 @@ namespace ecs
 		friend struct EntityCommand_Create;
 
 		template<class T>
-		void get_impl(const typeQueryList& typeIds, std::vector<std::vector<T>*>& out)
+		void get_impl(const typeQueryList& typeIds, std::vector<Archetype*>& archetypesOut, std::vector<std::vector<T>*>& out)
 		{
 			out.clear();
 			for (auto& itArchetype : archetypes_)
@@ -35,9 +35,10 @@ namespace ecs
 		}
 
 		template<>
-		void get_impl(const typeQueryList& typeIds, std::vector<std::vector<entityId>*>& out)
+		void get_impl(const typeQueryList& typeIds, std::vector<Archetype*>& archetypesOut, std::vector<std::vector<entityId>*>& out)
 		{
 			out.clear();
+			archetypesOut.clear();
 			for (auto& itArchetype : archetypes_)
 			{
 				if (!itArchetype->hasAllComponents(typeIds))
@@ -48,22 +49,25 @@ namespace ecs
 				if (itArchetype->entityIds_.size() == 0)
 					continue;
 
+				archetypesOut.push_back(itArchetype.get());
 				out.push_back(&itArchetype->entityIds_);
 			}
 		}
 
 		template<class T, class ...Ts>
-		void get_impl(const typeQueryList& typeIds, std::vector<std::vector<T>*>& out, std::vector<std::vector<Ts>*>&... restOut)
+		void get_impl(const typeQueryList& typeIds, std::vector<Archetype*>& archetypesOut, std::vector<std::vector<T>*>& out, std::vector<std::vector<Ts>*>&... restOut)
 		{
-			get_impl(typeIds, out);
-			get_impl(typeIds, restOut...);
+			get_impl(typeIds, archetypesOut, out);
+			get_impl(typeIds, archetypesOut, restOut...);
 		}
 
 		template<class ...Ts>
-		const std::tuple<std::vector<std::vector<entityId>*>, std::vector<std::vector<std::decay_t<Ts>>*>...>& get(const typeQueryList& typeIds)
+		const std::tuple<std::vector<std::vector<entityId>*>, std::vector<std::vector<std::decay_t<Ts>>*>...>& get(const typeQueryList& typeIds, std::vector<Archetype*>*& archetypesOut)
 		{
 			static std::tuple<std::vector<std::vector<entityId>*>, std::vector<std::vector<std::decay_t<Ts>>*>...> ret = {};
-			std::apply([&](auto& ...x) { get_impl(typeIds, x...); }, ret);
+			static std::vector<Archetype*> archetypesStatic;
+			std::apply([&](auto& ...x) { get_impl(typeIds, archetypesStatic, x...); }, ret);
+			archetypesOut = &archetypesStatic;
 			return ret;
 		}
 
@@ -169,6 +173,20 @@ namespace ecs
 		}
 
 		template<class ...Ts>
+		entityId createEntity(const Prefab<Ts...>& prefab)
+		{
+			return std::apply([&](auto& ...x) { return createEntity<Ts...>(x...); }, prefab.defaultValues);
+		}
+
+		template<class ...Ts, class ...Us>
+		entityId createEntity(const Prefab<Ts...>& prefab, const Us&... initialValue)
+		{
+			auto prefabCopy = prefab;
+			prefabCopy.setDefaultValue(initialValue...);
+			return createEntity(prefabCopy);
+		}
+
+		template<class ...Ts>
 		entityId createEntity()
 		{
 			entityId ret = createEntity_impl(getTypeIds<Ts...>());
@@ -205,6 +223,20 @@ namespace ecs
 			entityDataIndexMap_.erase(it);
 
 			return true;
+		}
+
+		template<class T>
+		void addComponent(entityId id, const T& data)
+		{
+			auto it = entityDataIndexMap_.find(id);
+			if (it == entityDataIndexMap_.end())
+				return;
+
+			Archetype* oldArchetype = archetypes_[it->second.archetypeIndex].get();
+			typeIdList newTypes = oldArchetype->containedTypes_;
+			newTypes.push_back(getTypeId<T>());
+			changeComponents(id, newTypes);
+			setComponent(id, data);
 		}
 
 		void deleteComponents(entityId id, const typeIdList& typeIds)

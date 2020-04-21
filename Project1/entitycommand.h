@@ -27,6 +27,27 @@ namespace ecs
 		std::tuple<Ts...> args;
 	};
 
+	template<class TPrefab, class ...Us>
+	struct EntityCommand_CreateFromPrefab : EntityCommand
+	{
+		EntityCommand_CreateFromPrefab(entityId id, const TPrefab* prefab, const Us&... initialValues)
+			: temporaryId(id)
+			, prefab(prefab)
+		{
+			args = std::make_tuple(initialValues...);
+		}
+
+		void execute(Ecs& ecs) override
+		{
+			entityId newId = std::apply([&](auto... x) { return ecs.createEntity(*prefab, x...); }, args);
+			ecs.temporaryEntityIdRemapping_[temporaryId] = newId;
+		}
+
+		entityId temporaryId;
+		const TPrefab* prefab;
+		std::tuple<Us...> args;
+	};
+
 	struct EntityCommand_Delete : EntityCommand
 	{
 		EntityCommand_Delete(entityId id)
@@ -87,6 +108,26 @@ namespace ecs
 
 		entityId id;
 		typeIdList types;
+	};
+
+	template<class T>
+	struct EntityCommand_AddComponent : EntityCommand
+	{
+		EntityCommand_AddComponent(entityId id, const T& data)
+			: id(id)
+			, data(data)
+		{}
+
+		void execute(struct Ecs& ecs) override
+		{
+			if (id < 0)
+				id = ecs.temporaryEntityIdRemapping_[id];
+
+			ecs.addComponent(id, data);
+		}
+
+		entityId id;
+		T data;
 	};
 
 	struct EntityCommand_ChangeComponents : EntityCommand

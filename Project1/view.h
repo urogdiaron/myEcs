@@ -24,25 +24,28 @@ namespace ecs
 			}
 		}
 
+		View(const View&) = delete;
+		View(View&& v) = default;
+
 		template <class ...Cs>
-		View& with()
+		View with()
 		{
 			ecs_->buildTypeQueryList<Cs...>(typeQueryList, TypeQueryItem::Required);
-			return *this;
+			return std::move(*this);
 		}
 
 		template <class ...Cs>
-		View& exclude()
+		View exclude()
 		{
-			ecs_->buildTypeQueryList<Cs...>(typeQueryList, TypeQueryItem::Excluded);
-			return *this;
+			ecs_->buildTypeQueryList<Cs...>(typeQueryList, TypeQueryItem::Exclude);
+			return std::move(*this);
 		}
 
 	private:
 		void initializeData()
 		{
 			if(!data_)
-				data_ = &ecs_->get<Ts...>(typeQueryList);
+				data_ = &ecs_->get<Ts...>(typeQueryList, archetypes_);
 		}
 	public:
 		struct iterator
@@ -130,6 +133,11 @@ namespace ecs
 				return std::apply([&](auto& ...x) { return std::forward_as_tuple(*x...); }, ret);
 			}
 
+			Archetype* getCurrentArchetype()
+			{
+				return view->archetypes_[vectorIndex];
+			}
+
 			View* view = nullptr;
 			int vectorIndex = -1;
 			int elementIndex = -1;
@@ -142,6 +150,14 @@ namespace ecs
 		iterator end()
 		{
 			return iterator();
+		}
+
+		template<class ...Ts, class ...Us>
+		entityId createEntity(const Prefab<Ts...>& prefab, const Us&... initialValues)
+		{
+			entityId newId = -((int)ecs_->entityCommandBuffer_.size() + 1);
+			ecs_->entityCommandBuffer_.push_back(std::make_unique<EntityCommand_CreateFromPrefab<Prefab<Ts...>, Us...>>(newId, &prefab, initialValues...));
+			return newId;
 		}
 
 		template<class ...Ts>
@@ -161,6 +177,12 @@ namespace ecs
 		void deleteComponents(entityId id)
 		{
 			ecs_->entityCommandBuffer_.push_back(std::make_unique<EntityCommand_DeleteComponents>(id, ecs_->getTypeIds<Ts...>()));
+		}
+
+		template<class T>
+		void addComponent(entityId id, const T& data)
+		{
+			ecs_->entityCommandBuffer_.push_back(std::make_unique<EntityCommand_AddComponent<T>>(id, data));
 		}
 
 		template<class... Ts>
@@ -202,6 +224,7 @@ namespace ecs
 
 		Ecs* ecs_;
 		typeQueryList typeQueryList;
+		std::vector<Archetype*>* archetypes_ = nullptr;
 		const std::tuple<std::vector<std::vector<entityId>*>, std::vector<std::vector<std::decay_t<Ts>>*>...>* data_ = nullptr;
 		bool autoExecuteCommandBuffer_ = true;
 	};

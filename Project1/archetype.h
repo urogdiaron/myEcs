@@ -88,45 +88,26 @@ namespace ecs
 
 		bool hasAllComponents(const typeQueryList& typeIds) const
 		{
-			int queryIndex = 0;
-			int containedTypeIndex = 0;
-			int foundCount = 0;
-
-			while (true)
+			// TODO
+			// we need to compare containedTypes and typeIds, both are sorted
+			// there is a fast algorithm here, but i just can't get it right
+			// for now we'll brute force it
+			for (auto& q : typeIds)
 			{
-				if (queryIndex >= (int)typeIds.size())
-					break;
-
-				if (containedTypeIndex >= (int)containedTypes_.size())
-					break;
-
-				if (typeIds[queryIndex].mode == TypeQueryItem::Exclude)
+				if (q.mode == TypeQueryItem::Mode::Exclude)
 				{
-					if (containedTypes_[containedTypeIndex] == typeIds[queryIndex].type)
-					{
+					auto it = std::find(containedTypes_.begin(), containedTypes_.end(), q.type);
+					if (it != containedTypes_.end())
 						return false;
-					}
-					else if (containedTypes_[containedTypeIndex] > typeIds[queryIndex].type)
-					{
-						queryIndex++;
-					}
 				}
 				else
 				{
-					if (containedTypes_[containedTypeIndex] == typeIds[queryIndex].type)
-					{
-						queryIndex++;
-						containedTypeIndex++;
-						foundCount++;
-					}
-					else
-					{
-						containedTypeIndex++;
-					}
+					auto it = std::find(containedTypes_.begin(), containedTypes_.end(), q.type);
+					if (it == containedTypes_.end())
+						return false;
 				}
 			}
-
-			return foundCount == typeIds.size();
+			return true;
 		}
 
 		typeIdList containedTypes_;
