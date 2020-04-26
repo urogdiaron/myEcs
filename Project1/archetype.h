@@ -6,12 +6,12 @@ namespace ecs
 {
 	struct Archetype
 	{
-		Archetype() {}
 		Archetype(const typeIdList& typeIds, const ComponentArrayFactory& componentFactory)
+			: containedTypes_(typeIds)
 		{
-			for (auto& t : typeIds)
+			for (auto& tid : typeIds.getTypeIds())
 			{
-				addType(t, componentFactory);
+				componentArrays_[tid] = componentFactory.create(tid);
 			}
 		}
 
@@ -23,26 +23,6 @@ namespace ecs
 				return it->second.get();
 			}
 			return nullptr;
-		}
-
-		template<class T>
-		bool add(const ComponentArrayFactory& componentFactory)
-		{
-			return addType(type_id<T>(), componentFactory);
-		}
-
-		bool addType(typeId tid, const ComponentArrayFactory& componentFactory)
-		{
-			auto it = componentArrays_.find(tid);
-			if (it != componentArrays_.end())
-				return false;
-
-			componentArrays_[tid] = componentFactory.create(tid);
-
-			containedTypes_.push_back(tid);
-			std::sort(containedTypes_.begin(), containedTypes_.end());
-
-			return true;
 		}
 
 		int createEntity(entityId id)
@@ -86,29 +66,10 @@ namespace ecs
 			return newIndex;
 		}
 
-		bool hasAllComponents(const typeQueryList& typeIds) const
+		bool hasAllComponents(const typeQueryList& query) const
 		{
 			EASY_FUNCTION();
-			// TODO
-			// we need to compare containedTypes and typeIds, both are sorted
-			// there is a fast algorithm here, but i just can't get it right
-			// for now we'll brute force it
-			for (auto& q : typeIds)
-			{
-				if (q.mode == TypeQueryItem::Mode::Exclude)
-				{
-					auto it = std::find(containedTypes_.begin(), containedTypes_.end(), q.type);
-					if (it != containedTypes_.end())
-						return false;
-				}
-				else
-				{
-					auto it = std::find(containedTypes_.begin(), containedTypes_.end(), q.type);
-					if (it == containedTypes_.end())
-						return false;
-				}
-			}
-			return true;
+			return query.check(containedTypes_);
 		}
 
 		typeIdList containedTypes_;

@@ -12,8 +12,10 @@ namespace ecs
 		View(Ecs& ecs, bool autoExecuteCommandBuffer = true)
 			: ecs_(&ecs)
 			, autoExecuteCommandBuffer_(autoExecuteCommandBuffer)
+			, typeQueryList((int)ecs.typeDescriptors_.size())
 		{
-			ecs.buildTypeQueryList<Ts...>(typeQueryList, TypeQueryItem::Write);
+			const typeIdList& exposedTypeIds = ecs.getTypeIds<Ts...>();
+			typeQueryList.add(exposedTypeIds.getTypeIds(), TypeQueryItem::Write);
 		}
 
 		~View()
@@ -30,14 +32,14 @@ namespace ecs
 		template <class ...Cs>
 		View with()
 		{
-			ecs_->buildTypeQueryList<Cs...>(typeQueryList, TypeQueryItem::Required);
+			typeQueryList.add(ecs_->getTypeIds<Cs...>().getTypeIds(), TypeQueryItem::Required);
 			return std::move(*this);
 		}
 
 		template <class ...Cs>
 		View exclude()
 		{
-			ecs_->buildTypeQueryList<Cs...>(typeQueryList, TypeQueryItem::Exclude);
+			typeQueryList.add(ecs_->getTypeIds<Cs...>().getTypeIds(), TypeQueryItem::Exclude);
 			return std::move(*this);
 		}
 
@@ -116,8 +118,8 @@ namespace ecs
 			template<class ...Ts>
 			bool hasComponents() const
 			{
-				auto& containedTypes = getCurrentArchetype()->containedTypes_;
-				for (auto id : view->ecs_->getTypeIds<Ts...>())
+				auto& containedTypes = getCurrentArchetype()->containedTypes_.getTypeIds();
+				for (auto id : view->ecs_->getTypeIds<Ts...>().getTypeIds())
 				{
 					auto it = std::find(containedTypes.begin(), containedTypes.end(), id);
 					if (it == containedTypes.end())

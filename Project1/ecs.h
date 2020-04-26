@@ -17,19 +17,11 @@ namespace ecs
 		friend struct EntityCommand_Create;
 
 		template<class T>
-		void get_impl(const typeQueryList& typeIds, std::vector<Archetype*>& archetypesOut, std::vector<std::vector<T>*>& out)
+		void get_impl(const typeQueryList& typeIds, const std::vector<Archetype*>& matchingArchetypes, std::vector<std::vector<T>*>& out)
 		{
 			out.clear();
-			for (auto& itArchetype : archetypes_)
+			for (auto& itArchetype : matchingArchetypes)
 			{
-				if (!itArchetype->hasAllComponents(typeIds))
-				{
-					continue;
-				}
-
-				if (itArchetype->entityIds_.size() == 0)
-					continue;
-
 				ComponentArrayBase* componentArray = itArchetype->get(getTypeId<T>());
 				if (componentArray)
 				{
@@ -39,30 +31,20 @@ namespace ecs
 		}
 
 		template<>
-		void get_impl(const typeQueryList& typeIds, std::vector<Archetype*>& archetypesOut, std::vector<std::vector<entityId>*>& out)
+		void get_impl(const typeQueryList& typeIds, const std::vector<Archetype*>& matchingArchetypes, std::vector<std::vector<entityId>*>& out)
 		{
 			out.clear();
-			archetypesOut.clear();
-			for (auto& itArchetype : archetypes_)
+			for (auto& itArchetype : matchingArchetypes)
 			{
-				if (!itArchetype->hasAllComponents(typeIds))
-				{
-					continue;
-				}
-
-				if (itArchetype->entityIds_.size() == 0)
-					continue;
-
-				archetypesOut.push_back(itArchetype.get());
 				out.push_back(&itArchetype->entityIds_);
 			}
 		}
 
 		template<class T, class ...Ts>
-		void get_impl(const typeQueryList& typeIds, std::vector<Archetype*>& archetypesOut, std::vector<std::vector<T>*>& out, std::vector<std::vector<Ts>*>&... restOut)
+		void get_impl(const typeQueryList& typeIds, const std::vector<Archetype*>& matchingArchetypes, std::vector<std::vector<T>*>& out, std::vector<std::vector<Ts>*>&... restOut)
 		{
-			get_impl(typeIds, archetypesOut, out);
-			get_impl(typeIds, archetypesOut, restOut...);
+			get_impl(typeIds, matchingArchetypes, out);
+			get_impl(typeIds, matchingArchetypes, restOut...);
 		}
 
 		template<class ...Ts>
@@ -70,33 +52,16 @@ namespace ecs
 		{
 			static std::tuple<std::vector<std::vector<entityId>*>, std::vector<std::vector<std::decay_t<Ts>>*>...> ret = {};
 			static std::vector<Archetype*> archetypesStatic;
+			archetypesStatic.clear();
+			for (auto& archetype : archetypes_)
+			{
+				if (archetype->hasAllComponents(typeIds) && archetype->entityIds_.size() > 0)
+					archetypesStatic.push_back(archetype.get());
+			}
+
 			std::apply([&](auto& ...x) { get_impl(typeIds, archetypesStatic, x...); }, ret);
 			archetypesOut = &archetypesStatic;
 			return ret;
-		}
-
-		template<class T>
-		int buildTypeQueryList_impl(typeQueryList& inOut, TypeQueryItem::Mode mode) const
-		{
-			TypeQueryItem newItem;
-			newItem.type = getTypeId<T>();
-			newItem.mode = mode;
-			if (mode == TypeQueryItem::Write)
-			{
-				if constexpr (std::is_const<T>::value)
-				{
-					newItem.mode = TypeQueryItem::Read;
-				}
-			}
-			inOut.push_back(newItem);
-			return 0;
-		}
-
-		template<class ...Ts>
-		void buildTypeQueryList(typeQueryList& inOut, TypeQueryItem::Mode mode) const
-		{
-			auto tmp = { buildTypeQueryList_impl<Ts>(inOut, mode)..., 0 };
-			std::sort(inOut.begin(), inOut.end(), [](const TypeQueryItem& a, const TypeQueryItem& b) -> int { return a.type < b.type; });
 		}
 
 		std::tuple<int, Archetype*> createArchetype(const typeIdList& typeIds)
@@ -142,12 +107,7 @@ namespace ecs
 		const typeIdList& getTypeIds() const
 		{
 			static bool needsSort = true;
-			static typeIdList ret{ getTypeId<Ts>()... };
-			if (needsSort)
-			{
-				makeVectorUniqueAndSorted(ret);
-				needsSort = false;
-			}
+			static typeIdList ret = typeIdList((int)typeDescriptors_.size(), { getTypeId<Ts>()... });
 			return ret;
 		}
 	public:
@@ -238,7 +198,7 @@ namespace ecs
 
 			Archetype* oldArchetype = archetypes_[it->second.archetypeIndex].get();
 			typeIdList newTypes = oldArchetype->containedTypes_;
-			newTypes.push_back(getTypeId<T>());
+			newTypes.addTypes({ getTypeId<T>() });
 			changeComponents(id, newTypes);
 			setComponent(id, data);
 		}
@@ -250,17 +210,8 @@ namespace ecs
 				return;
 
 			Archetype* oldArchetype = archetypes_[it->second.archetypeIndex].get();
-			typeIdList remainingTypes;
-			remainingTypes.reserve(oldArchetype->containedTypes_.size());
-			for (auto t : oldArchetype->containedTypes_)
-			{
-				auto it = std::find(typeIds.begin(), typeIds.end(), t);
-				if (it == typeIds.end())
-				{
-					remainingTypes.push_back(t);
-				}
-			}
-			
+			typeIdList remainingTypes = oldArchetype->containedTypes_;
+			remainingTypes.deleteTypes(typeIds.getTypeIds());
 			changeComponents(id, remainingTypes);
 		}
 
@@ -272,7 +223,6 @@ namespace ecs
 
 			Archetype* oldArchetype = archetypes_[it->second.archetypeIndex].get();
 			auto newTypes = typeIds;
-			makeVectorUniqueAndSorted(newTypes);
 
 			auto [archIndex, archetype] = createArchetype(newTypes);
 			if (archetype == oldArchetype)
@@ -360,7 +310,7 @@ public:
 			{
 				printf("Archetype %0.2d\n", i);
 				printf("Types: ");
-				for (auto type : arch->containedTypes_)
+				for (auto type : arch->containedTypes_.getTypeIds())
 				{
 					printf("%s, ", type->name.c_str());
 				}
