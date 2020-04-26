@@ -5,6 +5,10 @@ namespace ecs
 {
 	struct Ecs
 	{
+	public:
+		Ecs() = default;
+		Ecs(const Ecs & src) = delete;
+
 	private:
 		template<typename...>
 		friend struct View;

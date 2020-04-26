@@ -88,6 +88,7 @@ namespace ecs
 
 		bool hasAllComponents(const typeQueryList& typeIds) const
 		{
+			EASY_FUNCTION();
 			// TODO
 			// we need to compare containedTypes and typeIds, both are sorted
 			// there is a fast algorithm here, but i just can't get it right

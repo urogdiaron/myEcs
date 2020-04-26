@@ -44,14 +44,14 @@ namespace ecs
 	private:
 		void initializeData()
 		{
-			if(!data_)
+			EASY_FUNCTION();
+			if (!data_)
 				data_ = &ecs_->get<Ts...>(typeQueryList, archetypes_);
 		}
 	public:
 		struct iterator
 		{
 			iterator() = default;
-
 			iterator(View* v) : view(v)
 			{
 				view->initializeData();
@@ -107,35 +107,45 @@ namespace ecs
 				return vectorIndex >= 0 && elementIndex >= 0;
 			}
 
-			std::tuple<entityId, Ts &...> operator*()
+			entityId getId() const
+			{
+				auto& vectors = std::get<std::vector<std::vector<entityId>*>>(*view->data_);
+				elementOut = (*vectors[vectorIndex])[elementIndex];
+			}
+
+			template<class ...Ts>
+			bool hasComponents() const
+			{
+				auto& containedTypes = getCurrentArchetype()->containedTypes_;
+				for (auto id : view->ecs_->getTypeIds<Ts...>())
+				{
+					auto it = std::find(containedTypes.begin(), containedTypes.end(), id);
+					if (it == containedTypes.end())
+						return false;
+				}
+				return true;
+			}
+
+			std::tuple<const iterator&, const entityId&, Ts &...> operator*()
 			{
 				return getCurrentTuple();
 			}
 
 			template<class T>
-			void getCurrentTuple_impl(T*& elementOut)
+			T& getCurrentItem()
 			{
 				auto& vectors = std::get<std::vector<std::vector<std::decay_t<T>>*>>(*view->data_);
-				elementOut = &(*vectors[vectorIndex])[elementIndex];
+				return (*vectors[vectorIndex])[elementIndex];
 			}
 
-			template<class T, class ...Rest>
-			void getCurrentTuple_impl(T*& elementOut, Rest*&... rest)
+			std::tuple<const iterator&, const entityId&, Ts &...> getCurrentTuple()
 			{
-				getCurrentTuple_impl(elementOut);
-				getCurrentTuple_impl(rest...);
+				return { *this, getCurrentItem<const entityId>(), getCurrentItem<Ts>()... };
 			}
 
-			std::tuple<entityId, Ts &...> getCurrentTuple()
+			Archetype* getCurrentArchetype() const
 			{
-				std::tuple<entityId*, Ts *...> ret;
-				std::apply([&](auto& ...x) { getCurrentTuple_impl(x...); }, ret);
-				return std::apply([&](auto& ...x) { return std::forward_as_tuple(*x...); }, ret);
-			}
-
-			Archetype* getCurrentArchetype()
-			{
-				return view->archetypes_[vectorIndex];
+				return (*view->archetypes_)[vectorIndex];
 			}
 
 			View* view = nullptr;
@@ -180,7 +190,7 @@ namespace ecs
 		}
 
 		template<class T>
-		void addComponent(entityId id, const T& data)
+		void addComponent(entityId id, const T& data = T{})
 		{
 			ecs_->entityCommandBuffer_.push_back(std::make_unique<EntityCommand_AddComponent<T>>(id, data));
 		}
