@@ -46,7 +46,6 @@ namespace ecs
 	private:
 		void initializeData()
 		{
-			EASY_FUNCTION();
 			if (!data_)
 				data_ = &ecs_->get<Ts...>(typeQueryList, archetypes_);
 		}
@@ -118,14 +117,7 @@ namespace ecs
 			template<class ...Ts>
 			bool hasComponents() const
 			{
-				auto& containedTypes = getCurrentArchetype()->containedTypes_.getTypeIds();
-				for (auto id : view->ecs_->getTypeIds<Ts...>().getTypeIds())
-				{
-					auto it = std::find(containedTypes.begin(), containedTypes.end(), id);
-					if (it == containedTypes.end())
-						return false;
-				}
-				return true;
+				return getCurrentArchetype()->containedTypes_.hasAllTypes(view->ecs_->getTypeIds<Ts...>());
 			}
 
 			std::tuple<const iterator&, const entityId&, Ts &...> operator*()

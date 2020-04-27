@@ -79,8 +79,21 @@ namespace ecs
 			}
 		}
 
+		bool hasAllTypes(const typeIdList& requiredTypes) const
+		{
+			auto& reqBitField = requiredTypes.getBitfield();
+			for (size_t i = 0; i < bitField.size(); i++)
+			{
+				uint8_t byteToCheck = bitField[i];
+				uint8_t byteReq = reqBitField[i];
+				if ((byteToCheck & byteReq) != byteReq)
+					return false;
+			}
+			return true;
+		}
+
+		const std::vector<uint8_t>& getBitfield() const { return bitField; }
 		const std::vector<typeId>& getTypeIds() const { return typeIds; }
-		const std::vector<uint8_t> getBitfield() const { return bitField; }
 
 	private:
 		void setBit(int typeIndex)
@@ -150,10 +163,10 @@ namespace ecs
 		}
 
 	private:
-		std::vector<TypeQueryItem> queryItems;
-
 		typeIdList required;
 		typeIdList excluded;
+
+		std::vector<TypeQueryItem> queryItems;
 	};
 
 	template<class... Ts>

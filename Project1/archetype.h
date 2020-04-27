@@ -68,7 +68,6 @@ namespace ecs
 
 		bool hasAllComponents(const typeQueryList& query) const
 		{
-			EASY_FUNCTION();
 			return query.check(containedTypes_);
 		}
 
