@@ -6,6 +6,8 @@ namespace ecs
 {
 	struct Archetype
 	{
+		Archetype() : containedTypes_(1, {}) {}
+
 		Archetype(const typeIdList& typeIds, const ComponentArrayFactory& componentFactory)
 			: containedTypes_(typeIds)
 		{
@@ -69,6 +71,44 @@ namespace ecs
 		bool hasAllComponents(const typeQueryList& query) const
 		{
 			return query.check(containedTypes_);
+		}
+
+		void save(std::ostream& stream) const
+		{
+			containedTypes_.save(stream);
+			size_t count = 0;
+			count = entityIds_.size();
+			stream.write((const char*)&count, sizeof(count));
+			stream.write((const char*)entityIds_.data(), entityIds_.size() * sizeof(entityId));
+
+			count = componentArrays_.size();
+			stream.write((const char*)&count, sizeof(count));
+			for (auto& it : componentArrays_)
+			{
+				stream.write((const char*)&it.first->index, sizeof(typeIndex));
+				it.second->save(stream);
+			}
+		}
+
+		void load(std::istream& stream, const std::vector<typeId>& typeIdsByLoadedIndex, const ComponentArrayFactory& componentFactory)
+		{
+			containedTypes_.load(stream, typeIdsByLoadedIndex);
+			size_t entityCount = 0;
+			stream.read((char*)&entityCount, sizeof(entityCount));
+			entityIds_.resize(entityCount);
+			stream.read((char*)entityIds_.data(), entityCount * sizeof(entityId));
+
+			size_t componentCount = 0;
+			stream.read((char*)&componentCount, sizeof(componentCount));
+			for (size_t i = 0; i < componentCount; i++)
+			{
+				int loadedTypeIndex = 0;
+				stream.read((char*)&loadedTypeIndex, sizeof(loadedTypeIndex));
+				typeId actualTypeId = typeIdsByLoadedIndex[loadedTypeIndex];
+				auto componentArray = componentFactory.create(actualTypeId);
+				componentArray->load(stream);
+				componentArrays_[actualTypeId] = std::move(componentArray);
+			}
 		}
 
 		typeIdList containedTypes_;

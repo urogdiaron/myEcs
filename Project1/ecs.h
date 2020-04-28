@@ -118,7 +118,7 @@ namespace ecs
 			typeId oldTypeId = getTypeId<T>();
 			if (oldTypeId)
 			{
-				printf("Component \"%s\" is already registered!", name);
+				printf("Component \"%s\" is already registered!\n", name);
 				return;
 			}
 
@@ -286,6 +286,18 @@ private:
 			getComponents_impl(id, archetype, elementIndex, restOut...);
 		}
 
+		typeId getTypeIdByName(const std::string& typeName)
+		{
+			auto it = std::find_if(typeDescriptors_.begin(), typeDescriptors_.end(), [&](const std::unique_ptr<TypeDescriptor>& td) -> bool
+				{
+					return td->name == typeName;
+				});
+
+			if (it != typeDescriptors_.end())
+				return it->get();
+
+			return nullptr;
+		}
 
 public:
 
@@ -331,6 +343,83 @@ public:
 			int archetypeIndex;
 			int elementIndex;
 		};
+
+		void save(std::ostream& stream) const
+		{
+			size_t count = typeDescriptors_.size();
+			stream.write((char*)&count, sizeof(size_t));
+			for (auto& t : typeDescriptors_)
+			{
+				stream.write((const char*)&t->index, sizeof(t->index));
+				count = t->name.size();
+				stream.write((char*)&count, sizeof(size_t));
+				stream.write(t->name.data(), count);
+			}
+
+			count = entityDataIndexMap_.size();
+			stream.write((char*)&count, sizeof(size_t));
+			for (auto& it : entityDataIndexMap_)
+			{
+				stream.write((const char*)&it.first, sizeof(it.first));
+				stream.write((char*)&it.second, sizeof(it.second));
+				
+			}
+
+			count = archetypes_.size();
+			stream.write((char*)&count, sizeof(size_t));
+			for (auto& archetype : archetypes_)
+			{
+				archetype->save(stream);
+			}
+
+			stream.write((char*)&nextEntityId, sizeof(nextEntityId));
+		}
+
+		void load(std::istream& stream)
+		{
+			entityDataIndexMap_.clear();
+			archetypes_.clear();
+			entityCommandBuffer_.clear();
+			nextEntityId = 1;
+
+			size_t typeDescCount = 0;
+			stream.read((char*)&typeDescCount, sizeof(typeDescCount));
+			std::vector<typeId> typeIdsByLoadedIndex(typeDescCount);
+			for (size_t i = 0; i < typeDescCount; i++)
+			{
+				TypeDescriptor td;
+				stream.read((char*)&td.index, sizeof(td.index));
+				size_t count;
+				stream.read((char*)&count, sizeof(count));
+				td.name.resize(count);
+				stream.read(td.name.data(), count);
+				
+				typeId id = getTypeIdByName(td.name);
+				typeIdsByLoadedIndex[td.index] = id;
+			}
+
+			size_t entityCount = 0;
+			stream.read((char*)&entityCount, sizeof(entityCount));
+			for (size_t i = 0; i < entityCount; i++)
+			{
+				entityId id;
+				stream.read((char*)&id, sizeof(id));
+				entityDataIndex dataIndex;
+				stream.read((char*)&dataIndex, sizeof(dataIndex));
+				entityDataIndexMap_[id] = dataIndex;
+			}
+
+			size_t archetypeCount = 0;
+			stream.read((char*)&archetypeCount, sizeof(archetypeCount));
+			archetypes_.resize(archetypeCount);
+			for (size_t i = 0; i < archetypeCount; i++)
+			{
+				archetypes_[i] = std::make_unique<Archetype>();
+				archetypes_[i]->load(stream, typeIdsByLoadedIndex, componentArrayFactory_);
+			}
+
+			stream.read((char*)&nextEntityId, sizeof(nextEntityId));
+		}
 
 		ComponentArrayFactory componentArrayFactory_;
 		std::vector<std::unique_ptr<TypeDescriptor>> typeDescriptors_;	// we store pointers so the raw TypeDescriptor* will stay stable for sure

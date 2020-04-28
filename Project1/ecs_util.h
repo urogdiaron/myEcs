@@ -22,6 +22,23 @@ namespace ecs
 		v.pop_back();
 	}
 
+	template<class T>
+	void saveVector(std::ostream& stream, const std::vector<T>& v)
+	{
+		size_t count = v.size();
+		stream.write((const char*)&count, sizeof(count));
+		stream.write((const char*)v.data(), count * sizeof(T));
+	}
+
+	template<class T>
+	void loadVector(std::istream& stream, std::vector<T>& v)
+	{
+		size_t count = 0;
+		stream.read((char*)&count, sizeof(count));
+		v.resize(count);
+		stream.read((char*)v.data(), count * sizeof(T));
+	}
+
 	using entityId = int;
 
 	using typeIndex = int;
@@ -95,7 +112,38 @@ namespace ecs
 		const std::vector<uint8_t>& getBitfield() const { return bitField; }
 		const std::vector<typeId>& getTypeIds() const { return typeIds; }
 
+		void save(std::ostream& stream) const
+		{
+			size_t count = bitField.size();
+			stream.write((const char*)&count, sizeof(count));
+			stream.write((const char*)bitField.data(), bitField.size() * sizeof(uint8_t));
+		}
+
+		void load(std::istream& stream, const std::vector<typeId>& typeIdsByLoadedIndex)
+		{
+			size_t s;
+			stream.read((char*)&s, sizeof(s));
+			std::vector<uint8_t> loadedBitfield(s);
+			stream.read((char*)loadedBitfield.data(), s * sizeof(uint8_t));
+			bitField.resize(s);
+
+			for (int i = 0; i < (int)typeIdsByLoadedIndex.size(); i++)
+			{
+				int loadByteIndex = i / 8;
+				int loadBitIndex = i % 8;
+				if (loadedBitfield[loadByteIndex] & (1 << loadBitIndex))
+				{
+					int currentIndex = typeIdsByLoadedIndex[i]->index;
+					int currentByteIndex = currentIndex / 8;
+					int currentBitIndex = currentIndex % 8;
+					bitField[currentByteIndex] |= 1 << currentBitIndex;
+					typeIds.push_back(typeIdsByLoadedIndex[i]);
+				}
+			}
+		}
+
 	private:
+
 		void setBit(int typeIndex)
 		{
 			int byteIndex = typeIndex / 8;
