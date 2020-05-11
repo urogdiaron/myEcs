@@ -61,7 +61,7 @@ namespace ecs
 				id = ecs.temporaryEntityIdRemapping_[id];
 			}
 
-			ecs.deleteEntity(id);
+			ecs.deleteEntity(id, true);
 		}
 
 		entityId id;

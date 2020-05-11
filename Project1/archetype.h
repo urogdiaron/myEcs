@@ -90,24 +90,25 @@ namespace ecs
 			}
 		}
 
-		void load(std::istream& stream, const std::vector<typeId>& typeIdsByLoadedIndex, const ComponentArrayFactory& componentFactory)
+		void load(std::istream& stream, const typeIdList& typeIds, const std::vector<typeId>& typeIdsByLoadedIndex, const ComponentArrayFactory& componentFactory)
 		{
-			containedTypes_.load(stream, typeIdsByLoadedIndex);
+			containedTypes_ = typeIds;
 			size_t entityCount = 0;
 			stream.read((char*)&entityCount, sizeof(entityCount));
 			entityIds_.resize(entityCount);
 			stream.read((char*)entityIds_.data(), entityCount * sizeof(entityId));
 
-			size_t componentCount = 0;
-			stream.read((char*)&componentCount, sizeof(componentCount));
-			for (size_t i = 0; i < componentCount; i++)
+			auto typesSortedByIndex = containedTypes_.getTypeIds();
+			std::sort(typesSortedByIndex.begin(), typesSortedByIndex.end(), [](const typeId& a, const typeId& b) -> int
+				{
+					return a->index < b->index;
+				});
+
+			for (auto& t : typesSortedByIndex)
 			{
-				int loadedTypeIndex = 0;
-				stream.read((char*)&loadedTypeIndex, sizeof(loadedTypeIndex));
-				typeId actualTypeId = typeIdsByLoadedIndex[loadedTypeIndex];
-				auto componentArray = componentFactory.create(actualTypeId);
-				componentArray->load(stream);
-				componentArrays_[actualTypeId] = std::move(componentArray);
+				auto componentArray = componentFactory.create(t);
+				componentArray->load(stream, entityCount);
+				componentArrays_[t] = std::move(componentArray);
 			}
 		}
 

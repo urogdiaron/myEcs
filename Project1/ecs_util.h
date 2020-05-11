@@ -39,12 +39,20 @@ namespace ecs
 		stream.read((char*)v.data(), count * sizeof(T));
 	}
 
+	enum class ComponentType
+	{
+		Regular,
+		DontSave,
+		State	// Not saved, entity deletion keeps these alive
+	};
+
 	using entityId = int;
 
 	using typeIndex = int;
 	struct TypeDescriptor
 	{
 		typeIndex index;
+		ComponentType type;
 		std::string name;
 	};
 
@@ -109,6 +117,36 @@ namespace ecs
 			return true;
 		}
 
+		typeIdList createTypeListStateComponentsOnly() const
+		{
+			typeIdList ret = *this;
+			std::vector<typeId> typeIdsToDelete = typeIds;
+
+			typeIdsToDelete.erase(
+				std::remove_if(typeIdsToDelete.begin(), typeIdsToDelete.end(), [](const typeId& t)
+					{ return t->type == ComponentType::State; }),
+				typeIdsToDelete.end()
+			);
+
+			ret.deleteTypes(typeIdsToDelete);
+			return ret;
+		}
+
+		typeIdList createTypeListWithOnlySavedComponents() const
+		{
+			typeIdList ret = *this;	
+			std::vector<typeId> typeIdsToDelete = typeIds;
+
+			typeIdsToDelete.erase(
+				std::remove_if(typeIdsToDelete.begin(), typeIdsToDelete.end(), [](const typeId& t)
+					{ return (t->type != ComponentType::State && t->type != ComponentType::DontSave); }),
+				typeIdsToDelete.end()
+			);
+
+			ret.deleteTypes(typeIdsToDelete);
+			return ret;
+		}
+
 		const std::vector<uint8_t>& getBitfield() const { return bitField; }
 		const std::vector<typeId>& getTypeIds() const { return typeIds; }
 
@@ -123,9 +161,12 @@ namespace ecs
 		{
 			size_t s;
 			stream.read((char*)&s, sizeof(s));
+
+			if (!s)
+				return;
+
 			std::vector<uint8_t> loadedBitfield(s);
 			stream.read((char*)loadedBitfield.data(), s * sizeof(uint8_t));
-			bitField.resize(s);
 
 			for (int i = 0; i < (int)typeIdsByLoadedIndex.size(); i++)
 			{

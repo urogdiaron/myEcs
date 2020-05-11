@@ -12,7 +12,7 @@ namespace ecs
 		virtual void deleteEntity(int elementIndex) = 0;
 		virtual void copyFromArray(int sourceElementIndex, const ComponentArrayBase* sourceArray) = 0;
 		virtual void save(std::ostream& stream) const = 0;
-		virtual void load(std::istream& stream) = 0;
+		virtual void load(std::istream& stream, size_t count) = 0;
 		typeId getTypeId() { return tid; }
 	protected:
 		typeId tid;
@@ -41,37 +41,33 @@ namespace ecs
 
 		void save(std::ostream& stream) const override
 		{
-			size_t count = components_.size();
-			stream.write((const char*)&count, sizeof(count));
 			if constexpr (std::is_trivially_copyable_v<T>)
 			{
 				stream.write((const char*)components_.data(), components_.size() * sizeof(T));
 			}
-			else
+			/*else
 			{
 				for (auto& c : components_)
 				{
 					c.save(stream);
 				}
-			}
+			}*/
 		}
 
-		void load(std::istream& stream) override
+		void load(std::istream& stream, size_t count) override
 		{
-			size_t count = 0;
-			stream.read((char*)&count, sizeof(count));
 			components_.resize(count);
 			if constexpr (std::is_trivially_copyable_v<T>)
 			{
 				stream.read((char*)components_.data(), count * sizeof(T));
 			}
-			else
+			/*else
 			{
 				for (auto& c : components_)
 				{
 					c.load(stream);
 				}
-			}
+			}*/
 		}
 
 		std::vector<T> components_;

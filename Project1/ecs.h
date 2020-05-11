@@ -113,7 +113,7 @@ namespace ecs
 	public:
 
 		template<class T>
-		void registerType(const char* name)
+		void registerType(const char* name, ComponentType componentType = ComponentType::Regular)
 		{
 			typeId oldTypeId = getTypeId<T>();
 			if (oldTypeId)
@@ -124,6 +124,7 @@ namespace ecs
 
 			auto& typeDesc = typeDescriptors_.emplace_back(std::make_unique<TypeDescriptor>());
 			typeDesc->index = (int)typeDescriptors_.size() - 1;
+			typeDesc->type = componentType;
 			typeDesc->name = name;
 			componentArrayFactory_.addFactoryFunction<T>(typeDesc.get());
 		}
@@ -165,13 +166,31 @@ namespace ecs
 			return ret;
 		}
 
-		bool deleteEntity(entityId id)
+		// If you call this from the outside, keepStateComponents needs to be true. False is only for internal usage.
+		bool deleteEntity(entityId id, bool keepStateComponents = true)
 		{
 			auto it = entityDataIndexMap_.find(id);
 			if (it == entityDataIndexMap_.end())
 				return false;
 
 			Archetype* arch = archetypes_[it->second.archetypeIndex].get();
+
+			if (keepStateComponents)
+			{
+				// Check if the archetype had State type components
+				// If it did, don't actually delete the entity. Keep the state components.
+				for (auto typeDesc : arch->containedTypes_.getTypeIds())
+				{
+					if (typeDesc->type == ComponentType::State)
+					{
+						typeIdList stateComponentsOnly = arch->containedTypes_.createTypeListStateComponentsOnly();
+						changeComponents(id, stateComponentsOnly);
+						return true;
+					}
+				}
+			}
+
+			// Delete the entity and clean up the map indices
 			arch->deleteEntity(it->second.elementIndex);
 
 			for (int i = it->second.elementIndex; i < (int)arch->entityIds_.size(); i++)
@@ -224,12 +243,18 @@ namespace ecs
 			Archetype* oldArchetype = archetypes_[it->second.archetypeIndex].get();
 			auto newTypes = typeIds;
 
+			if (newTypes.getTypeIds().size() == 0)
+			{	// we deleted all the components
+				deleteEntity(id, false);
+				return;
+			}
+
 			auto [archIndex, archetype] = createArchetype(newTypes);
 			if (archetype == oldArchetype)
 				return;
 
 			int newElementIndex = archetype->copyFromEntity(id, it->second.elementIndex, oldArchetype);
-			deleteEntity(id);
+			deleteEntity(id, false);
 			entityDataIndexMap_[id] = { archIndex, newElementIndex };
 		}
 
@@ -356,20 +381,86 @@ public:
 				stream.write(t->name.data(), count);
 			}
 
-			count = entityDataIndexMap_.size();
+			// Collect all archetypes that are equivalent even after disregarding state components
+			auto entityMapCopy = std::unordered_map<entityId, entityDataIndex>();
+
+			int archetypeIndex = 0;
+			std::vector<uint8_t> skipArchetype(archetypes_.size());
+			for (size_t iArch = 0; iArch < archetypes_.size(); iArch++)
+			{
+				if (skipArchetype[iArch])
+					continue;
+				auto archetype = archetypes_[iArch].get();
+				typeIdList typeIdsToSave = archetype->containedTypes_.createTypeListWithOnlySavedComponents();
+				if (typeIdsToSave.getTypeIds().size() == 0)
+					continue;	// don't save empty archetypes
+
+				std::vector<const Archetype*> archetypesToSave = { archetype };
+				for (size_t iArchToCheck = iArch + 1; iArchToCheck < archetypes_.size(); iArchToCheck++)
+				{
+					if (skipArchetype[iArch])
+						continue;
+					auto archetypeToMerge = archetypes_[iArchToCheck].get();
+					typeIdList typeIdsToCheck = archetypeToMerge->containedTypes_.createTypeListWithOnlySavedComponents();
+					if (typeIdsToSave != typeIdsToCheck)
+						continue;
+
+					// These two archetypes are the same without state components
+					skipArchetype[iArchToCheck] = 1;
+					archetypesToSave.push_back(archetypeToMerge);
+				}
+
+				size_t entityCount = 0;
+				for (auto arch : archetypesToSave)
+				{
+					for (auto& entity : arch->entityIds_)
+					{
+						auto& entityMapEntry = entityMapCopy[entity];
+						entityMapEntry.archetypeIndex = archetypeIndex;
+						entityMapEntry.elementIndex = (int)entityCount;
+						entityCount++;
+					}
+				}
+
+				if (entityCount == 0)
+					continue;
+
+				archetypeIndex++;
+
+				typeIdsToSave.save(stream);
+				stream.write((const char*)&entityCount, sizeof(entityCount));
+
+				for (auto arch : archetypesToSave)
+				{
+					stream.write((const char*)arch->entityIds_.data(), arch->entityIds_.size() * sizeof(entityId));
+				}
+
+				auto typesSortedByIndex = typeIdsToSave.getTypeIds();
+				std::sort(typesSortedByIndex.begin(), typesSortedByIndex.end(), [](const typeId& a, const typeId& b) -> int
+					{
+						return a->index < b->index;
+					});
+
+				for (auto t : typesSortedByIndex)
+				{
+					for (auto arch : archetypesToSave)
+					{
+						auto it = arch->componentArrays_.find(t);
+						it->second->save(stream);
+					}
+				}
+			}
+
+			// write out an empty typeidlist to signal end of archetypes
+			count = 0;
 			stream.write((char*)&count, sizeof(size_t));
-			for (auto& it : entityDataIndexMap_)
+
+			count = entityMapCopy.size();
+			stream.write((char*)&count, sizeof(size_t));
+			for (auto& it : entityMapCopy)
 			{
 				stream.write((const char*)&it.first, sizeof(it.first));
 				stream.write((char*)&it.second, sizeof(it.second));
-				
-			}
-
-			count = archetypes_.size();
-			stream.write((char*)&count, sizeof(size_t));
-			for (auto& archetype : archetypes_)
-			{
-				archetype->save(stream);
 			}
 
 			stream.write((char*)&nextEntityId, sizeof(nextEntityId));
@@ -398,6 +489,18 @@ public:
 				typeIdsByLoadedIndex[td.index] = id;
 			}
 
+			while (true)
+			{
+				typeIdList loadedTypeIds = getTypeIds<>();
+				loadedTypeIds.load(stream, typeIdsByLoadedIndex);
+
+				if (loadedTypeIds.getTypeIds().size() == 0)
+					break;
+
+				auto& itArch = archetypes_.emplace_back(std::make_unique<Archetype>());
+				itArch->load(stream, loadedTypeIds, typeIdsByLoadedIndex, componentArrayFactory_);
+			}
+
 			size_t entityCount = 0;
 			stream.read((char*)&entityCount, sizeof(entityCount));
 			for (size_t i = 0; i < entityCount; i++)
@@ -407,15 +510,6 @@ public:
 				entityDataIndex dataIndex;
 				stream.read((char*)&dataIndex, sizeof(dataIndex));
 				entityDataIndexMap_[id] = dataIndex;
-			}
-
-			size_t archetypeCount = 0;
-			stream.read((char*)&archetypeCount, sizeof(archetypeCount));
-			archetypes_.resize(archetypeCount);
-			for (size_t i = 0; i < archetypeCount; i++)
-			{
-				archetypes_[i] = std::make_unique<Archetype>();
-				archetypes_[i]->load(stream, typeIdsByLoadedIndex, componentArrayFactory_);
 			}
 
 			stream.read((char*)&nextEntityId, sizeof(nextEntityId));
