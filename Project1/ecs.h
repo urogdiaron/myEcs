@@ -6,7 +6,12 @@ namespace ecs
 	struct Ecs
 	{
 	public:
-		Ecs() = default;
+		Ecs()
+		{
+			registerType<DontSaveEntity>("DontSaveEntity", ComponentType::Internal);
+			registerType<DeletedEntity>("DeletedEntity", ComponentType::Internal);
+		}
+
 		Ecs(const Ecs & src) = delete;
 
 	private:
@@ -386,6 +391,14 @@ public:
 
 			int archetypeIndex = 0;
 			std::vector<uint8_t> skipArchetype(archetypes_.size());
+			typeId dontSaveEntityType = getTypeId<DontSaveEntity>();
+
+			for (size_t iArch = 0; iArch < archetypes_.size(); iArch++)
+			{
+				if (archetypes_[iArch]->containedTypes_.hasType(dontSaveEntityType))
+					skipArchetype[iArch] = 1;
+			}
+
 			for (size_t iArch = 0; iArch < archetypes_.size(); iArch++)
 			{
 				if (skipArchetype[iArch])

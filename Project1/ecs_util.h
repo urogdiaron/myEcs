@@ -43,7 +43,8 @@ namespace ecs
 	{
 		Regular,
 		DontSave,
-		State	// Not saved, entity deletion keeps these alive
+		State,		// Not saved, entity deletion keeps these alive
+		Internal	// For internal use
 	};
 
 	using entityId = int;
@@ -78,6 +79,11 @@ namespace ecs
 		bool operator==(const typeIdList& rhs) const
 		{
 			return bitField == rhs.bitField;
+		}
+
+		bool operator!=(const typeIdList& rhs) const
+		{
+			return !(*this == rhs);
 		}
 
 		void addTypes(const std::vector<typeId>& tids)
@@ -115,6 +121,11 @@ namespace ecs
 					return false;
 			}
 			return true;
+		}
+
+		bool hasType(const typeId& type)
+		{
+			return getBit(type->index);
 		}
 
 		typeIdList createTypeListStateComponentsOnly() const
@@ -184,6 +195,12 @@ namespace ecs
 		}
 
 	private:
+		bool getBit(int typeIndex) const
+		{
+			int byteIndex = typeIndex / 8;
+			int bitIndex = typeIndex % 8;
+			return bitField[byteIndex] & (1 << bitIndex);
+		}
 
 		void setBit(int typeIndex)
 		{
@@ -286,4 +303,7 @@ namespace ecs
 
 		std::tuple<Ts...> defaultValues;
 	};
+
+	struct DontSaveEntity {};
+	struct DeletedEntity {};;
 }
