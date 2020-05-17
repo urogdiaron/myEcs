@@ -81,7 +81,7 @@ namespace ecs
 				i++;
 			}
 
-			auto& insertedItem = archetypes_.emplace_back(std::make_unique<Archetype>(typeIds, componentArrayFactory_));
+			auto& insertedItem = archetypes_.emplace_back(std::make_unique<Archetype>(typeIds, typeIds_, componentArrayFactory_));
 			return { i, insertedItem.get() };
 		}
 
@@ -93,6 +93,7 @@ namespace ecs
 			entityDataIndexMap_[newEntityId] = { archIndex, elementIndex };
 			return newEntityId;
 		}
+
 		template<class T>
 		typeId getTypeId_impl() const
 		{
@@ -132,6 +133,7 @@ namespace ecs
 			typeDesc->type = componentType;
 			typeDesc->name = name;
 			componentArrayFactory_.addFactoryFunction<T>(typeDesc.get());
+			typeIds_.push_back(typeDesc.get());
 		}
 
 		template<class T>
@@ -184,11 +186,12 @@ namespace ecs
 			{
 				// Check if the archetype had State type components
 				// If it did, don't actually delete the entity. Keep the state components.
-				for (auto typeDesc : arch->containedTypes_.getTypeIds())
+				for (auto typeDesc : arch->containedTypes_.calcTypeIds(typeIds_))
 				{
 					if (typeDesc->type == ComponentType::State)
 					{
-						typeIdList stateComponentsOnly = arch->containedTypes_.createTypeListStateComponentsOnly();
+						typeIdList stateComponentsOnly = arch->containedTypes_.createTypeListStateComponentsOnly(typeIds_);
+						stateComponentsOnly.addTypes({ getTypeId<DeletedEntity>() });
 						changeComponents(id, stateComponentsOnly);
 						return true;
 					}
@@ -235,7 +238,7 @@ namespace ecs
 
 			Archetype* oldArchetype = archetypes_[it->second.archetypeIndex].get();
 			typeIdList remainingTypes = oldArchetype->containedTypes_;
-			remainingTypes.deleteTypes(typeIds.getTypeIds());
+			remainingTypes.deleteTypes(typeIds);
 			changeComponents(id, remainingTypes);
 		}
 
@@ -248,8 +251,10 @@ namespace ecs
 			Archetype* oldArchetype = archetypes_[it->second.archetypeIndex].get();
 			auto newTypes = typeIds;
 
-			if (newTypes.getTypeIds().size() == 0)
-			{	// we deleted all the components
+			size_t typeCount = newTypes.calcTypeCount();
+			if (typeCount == 0 ||
+				(typeCount == 1 && newTypes.hasType(getTypeId<DeletedEntity>())))
+			{	// we deleted all the components or only the deleted entity field left
 				deleteEntity(id, false);
 				return;
 			}
@@ -352,7 +357,7 @@ public:
 			{
 				printf("Archetype %0.2d\n", i);
 				printf("Types: ");
-				for (auto type : arch->containedTypes_.getTypeIds())
+				for (auto type : arch->containedTypes_.calcTypeIds(typeIds_))
 				{
 					printf("%s, ", type->name.c_str());
 				}
@@ -404,8 +409,8 @@ public:
 				if (skipArchetype[iArch])
 					continue;
 				auto archetype = archetypes_[iArch].get();
-				typeIdList typeIdsToSave = archetype->containedTypes_.createTypeListWithOnlySavedComponents();
-				if (typeIdsToSave.getTypeIds().size() == 0)
+				typeIdList typeIdsToSave = archetype->containedTypes_.createTypeListWithOnlySavedComponents(typeIds_);
+				if (typeIdsToSave.isEmpty())
 					continue;	// don't save empty archetypes
 
 				std::vector<const Archetype*> archetypesToSave = { archetype };
@@ -414,7 +419,7 @@ public:
 					if (skipArchetype[iArch])
 						continue;
 					auto archetypeToMerge = archetypes_[iArchToCheck].get();
-					typeIdList typeIdsToCheck = archetypeToMerge->containedTypes_.createTypeListWithOnlySavedComponents();
+					typeIdList typeIdsToCheck = archetypeToMerge->containedTypes_.createTypeListWithOnlySavedComponents(typeIds_);
 					if (typeIdsToSave != typeIdsToCheck)
 						continue;
 
@@ -448,12 +453,7 @@ public:
 					stream.write((const char*)arch->entityIds_.data(), arch->entityIds_.size() * sizeof(entityId));
 				}
 
-				auto typesSortedByIndex = typeIdsToSave.getTypeIds();
-				std::sort(typesSortedByIndex.begin(), typesSortedByIndex.end(), [](const typeId& a, const typeId& b) -> int
-					{
-						return a->index < b->index;
-					});
-
+				auto typesSortedByIndex = typeIdsToSave.calcTypeIds(typeIds_);
 				for (auto t : typesSortedByIndex)
 				{
 					for (auto arch : archetypesToSave)
@@ -507,11 +507,11 @@ public:
 				typeIdList loadedTypeIds = getTypeIds<>();
 				loadedTypeIds.load(stream, typeIdsByLoadedIndex);
 
-				if (loadedTypeIds.getTypeIds().size() == 0)
+				if (loadedTypeIds.isEmpty())
 					break;
 
 				auto& itArch = archetypes_.emplace_back(std::make_unique<Archetype>());
-				itArch->load(stream, loadedTypeIds, typeIdsByLoadedIndex, componentArrayFactory_);
+				itArch->load(stream, loadedTypeIds, typeIds_, componentArrayFactory_);
 			}
 
 			size_t entityCount = 0;
@@ -530,6 +530,7 @@ public:
 
 		ComponentArrayFactory componentArrayFactory_;
 		std::vector<std::unique_ptr<TypeDescriptor>> typeDescriptors_;	// we store pointers so the raw TypeDescriptor* will stay stable for sure
+		std::vector<typeId> typeIds_;	// This is the same as the typedescriptors but has no ownership. I didn't want the api to have unique_ptr all over the place
 		std::unordered_map<entityId, entityDataIndex> entityDataIndexMap_;
 		std::vector<std::unique_ptr<Archetype>> archetypes_;
 		std::vector<std::unique_ptr<struct EntityCommand>> entityCommandBuffer_;

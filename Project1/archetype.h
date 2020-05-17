@@ -8,10 +8,10 @@ namespace ecs
 	{
 		Archetype() : containedTypes_(1, {}) {}
 
-		Archetype(const typeIdList& typeIds, const ComponentArrayFactory& componentFactory)
+		Archetype(const typeIdList& typeIds, const std::vector<typeId>& allRegisteredTypeIds, const ComponentArrayFactory& componentFactory)
 			: containedTypes_(typeIds)
 		{
-			for (auto& tid : typeIds.getTypeIds())
+			for (auto& tid : typeIds.calcTypeIds(allRegisteredTypeIds))
 			{
 				componentArrays_[tid] = componentFactory.create(tid);
 			}
@@ -90,7 +90,7 @@ namespace ecs
 			}
 		}
 
-		void load(std::istream& stream, const typeIdList& typeIds, const std::vector<typeId>& typeIdsByLoadedIndex, const ComponentArrayFactory& componentFactory)
+		void load(std::istream& stream, const typeIdList& typeIds, const std::vector<typeId>& allRegisterTypeIds, const ComponentArrayFactory& componentFactory)
 		{
 			containedTypes_ = typeIds;
 			size_t entityCount = 0;
@@ -98,12 +98,7 @@ namespace ecs
 			entityIds_.resize(entityCount);
 			stream.read((char*)entityIds_.data(), entityCount * sizeof(entityId));
 
-			auto typesSortedByIndex = containedTypes_.getTypeIds();
-			std::sort(typesSortedByIndex.begin(), typesSortedByIndex.end(), [](const typeId& a, const typeId& b) -> int
-				{
-					return a->index < b->index;
-				});
-
+			auto typesSortedByIndex = containedTypes_.calcTypeIds(allRegisterTypeIds);
 			for (auto& t : typesSortedByIndex)
 			{
 				auto componentArray = componentFactory.create(t);

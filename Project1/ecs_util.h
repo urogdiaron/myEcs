@@ -1,5 +1,6 @@
 #pragma once
 #include <vector>
+#include <array>
 #include <string>
 #include <utility>
 
@@ -59,21 +60,26 @@ namespace ecs
 
 	using typeId = TypeDescriptor*;
 
+
+#define DEBUG_TYPEIDLISTS
+
 	struct typeIdList
 	{
-		typeIdList(int totalTypeCount, std::initializer_list<typeId> tids)
-			: typeIds(tids)
+		typeIdList(size_t totalTypeCount, std::initializer_list<typeId> tids)
 		{
-			int byteCount = (totalTypeCount + 7) / 8;
-			bitField.resize(byteCount);
-			for (auto& tid : typeIds)
+			//size_t byteCount = (totalTypeCount + 7) / 8;
+			//bitField.resize(byteCount);
+			for (auto& tid : tids)
 			{
-				int byteIndex = tid->index / 8;
-				int bitIndex = tid->index % 8;
+				size_t byteIndex = tid->index / 8;
+				size_t bitIndex = tid->index % 8;
 				bitField[byteIndex] |= 1 << bitIndex;
 			}
 
+#ifdef DEBUG_TYPEIDLISTS
+			typeIds = tids;
 			makeVectorUniqueAndSorted(typeIds);
+#endif
 		}
 
 		bool operator==(const typeIdList& rhs) const
@@ -90,24 +96,64 @@ namespace ecs
 		{
 			for (auto tid : tids)
 			{
-				typeIds.push_back(tid);
 				setBit(tid->index);
 			}
 
+#ifdef DEBUG_TYPEIDLISTS
+			typeIds.insert(typeIds.end(), tids.begin(), tids.end());
 			makeVectorUniqueAndSorted(typeIds);
+#endif
+		}
+
+		void addTypes(const typeIdList& typesToAdd)
+		{
+			for (size_t i = 0; i < bitField.size(); i++)
+			{
+				bitField[i] = bitField[i] | (typesToAdd.bitField[i]);
+			}
+
+#ifdef DEBUG_TYPEIDLISTS
+			typeIds.insert(typeIds.end(), typesToAdd.typeIds.begin(), typesToAdd.typeIds.end());
+			makeVectorUniqueAndSorted(typeIds);
+#endif
 		}
 
 		void deleteTypes(const std::vector<typeId>& tids)
 		{
 			for (auto t : tids)
 			{
+				clearBit(t->index);
+			}
+
+#ifdef DEBUG_TYPEIDLISTS
+			for (auto t : tids)
+			{
 				auto it = std::find(typeIds.begin(), typeIds.end(), t);
 				if (it != typeIds.end())
 				{
 					typeIds.erase(it);
-					clearBit(t->index);
 				}
 			}
+#endif
+		}
+
+		void deleteTypes(const typeIdList& typesToDelete)
+		{
+			for (size_t i = 0; i < bitField.size(); i++)
+			{
+				bitField[i] = bitField[i] & (~typesToDelete.bitField[i]);
+			}
+
+#ifdef DEBUG_TYPEIDLISTS
+			for (auto t : typesToDelete.typeIds)
+			{
+				auto it = std::find(typeIds.begin(), typeIds.end(), t);
+				if (it != typeIds.end())
+				{
+					typeIds.erase(it);
+				}
+			}
+#endif
 		}
 
 		bool hasAllTypes(const typeIdList& requiredTypes) const
@@ -128,38 +174,92 @@ namespace ecs
 			return getBit(type->index);
 		}
 
-		typeIdList createTypeListStateComponentsOnly() const
+		typeIdList createTypeListStateComponentsOnly(const std::vector<typeId>& allRegisteredTypeIds) const
 		{
-			typeIdList ret = *this;
-			std::vector<typeId> typeIdsToDelete = typeIds;
+			typeIdList ret(allRegisteredTypeIds.size(), {});
 
-			typeIdsToDelete.erase(
-				std::remove_if(typeIdsToDelete.begin(), typeIdsToDelete.end(), [](const typeId& t)
-					{ return t->type == ComponentType::State; }),
-				typeIdsToDelete.end()
-			);
+			for (size_t i = 0; i < allRegisteredTypeIds.size(); i++)
+			{
+				size_t byteIndex = i / 8;
+				size_t bitIndex = i % 8;
+				bool hasType = bitField[byteIndex] & (1 << bitIndex);
+				if (hasType)
+				{
+					auto componentType = allRegisteredTypeIds[i]->type;
+					if (componentType == ComponentType::State)
+						ret.bitField[byteIndex] |= 1 << bitIndex;
+				}
+			}
 
-			ret.deleteTypes(typeIdsToDelete);
+#ifdef DEBUG_TYPEIDLISTS
+			ret.typeIds = ret.calcTypeIds(allRegisteredTypeIds);
+#endif
 			return ret;
 		}
 
-		typeIdList createTypeListWithOnlySavedComponents() const
+		typeIdList createTypeListWithOnlySavedComponents(const std::vector<typeId>& allRegisteredTypeIds) const
 		{
-			typeIdList ret = *this;	
-			std::vector<typeId> typeIdsToDelete = typeIds;
+			typeIdList ret(allRegisteredTypeIds.size(), {});
 
-			typeIdsToDelete.erase(
-				std::remove_if(typeIdsToDelete.begin(), typeIdsToDelete.end(), [](const typeId& t)
-					{ return (t->type != ComponentType::State && t->type != ComponentType::DontSave); }),
-				typeIdsToDelete.end()
-			);
+			for (size_t i = 0; i < allRegisteredTypeIds.size(); i++)
+			{
+				size_t byteIndex = i / 8;
+				size_t bitIndex = i % 8;
+				bool hasType = bitField[byteIndex] & (1 << bitIndex);
+				if (hasType)
+				{
+					auto componentType = allRegisteredTypeIds[i]->type;
+					if (componentType == ComponentType::DontSave || componentType == ComponentType::State)
+						continue;
+					ret.bitField[byteIndex] |= 1 << bitIndex;
+				}
+			}
 
-			ret.deleteTypes(typeIdsToDelete);
+#ifdef DEBUG_TYPEIDLISTS
+			ret.typeIds = ret.calcTypeIds(allRegisteredTypeIds);
+#endif
+
 			return ret;
 		}
 
-		const std::vector<uint8_t>& getBitfield() const { return bitField; }
-		const std::vector<typeId>& getTypeIds() const { return typeIds; }
+		const std::array<uint8_t, 4>& getBitfield() const { return bitField; }
+
+		std::vector<typeId> calcTypeIds(const std::vector<typeId>& allRegisteredTypeIds) const 
+		{
+			std::vector<typeId> ret;
+			for (int i = 0; i < (int)allRegisteredTypeIds.size(); i++)
+			{
+				if (getBit(i))
+				{
+					ret.push_back(allRegisteredTypeIds[i]);
+				}
+			}
+			return ret;
+		}
+
+		bool isEmpty() const
+		{
+			for (auto& b : bitField)
+			{
+				if (b != 0)
+					return false;
+			}
+			return true;
+		}
+
+		size_t calcTypeCount() const
+		{
+			size_t ret = 0;
+			for (auto& b : bitField)
+			{
+				for (uint8_t i = 0; i < 8; i++)
+				{
+					if (b & (1 << i))
+						ret++;
+				}
+			}
+			return ret;
+		}
 
 		void save(std::ostream& stream) const
 		{
@@ -189,7 +289,10 @@ namespace ecs
 					int currentByteIndex = currentIndex / 8;
 					int currentBitIndex = currentIndex % 8;
 					bitField[currentByteIndex] |= 1 << currentBitIndex;
+
+#ifdef DEBUG_TYPEIDLISTS
 					typeIds.push_back(typeIdsByLoadedIndex[i]);
+#endif
 				}
 			}
 		}
@@ -216,13 +319,17 @@ namespace ecs
 			bitField[byteIndex] &= ~(1 << bitIndex);
 		}
 
-		std::vector<uint8_t> bitField;
+		//std::vector<uint8_t> bitField;
+		std::array<uint8_t, 4> bitField = {};
+
+#ifdef DEBUG_TYPEIDLISTS
 		std::vector<typeId> typeIds;
+#endif
 	};
 
 	struct TypeQueryItem
 	{
-		enum Mode { Read, Write, Exclude, Required };
+		enum class Mode { Read, Write, Exclude, Required };
 		typeId type;
 		Mode mode;
 	};
@@ -235,14 +342,9 @@ namespace ecs
 		{
 		}
 
-		void add(const std::vector<typeId>& tids, TypeQueryItem::Mode mode)
+		void add(const typeIdList& tids, TypeQueryItem::Mode mode)
 		{
-			for (auto tid : tids)
-			{
-				queryItems.push_back({ tid, mode });
-			}
-
-			if (mode != TypeQueryItem::Exclude)
+			if (mode != TypeQueryItem::Mode::Exclude)
 			{
 				required.addTypes(tids);
 			}
@@ -271,8 +373,6 @@ namespace ecs
 	private:
 		typeIdList required;
 		typeIdList excluded;
-
-		std::vector<TypeQueryItem> queryItems;
 	};
 
 	template<class... Ts>

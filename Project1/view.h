@@ -15,7 +15,7 @@ namespace ecs
 			, typeQueryList((int)ecs.typeDescriptors_.size())
 		{
 			const typeIdList& exposedTypeIds = ecs.getTypeIds<Ts...>();
-			typeQueryList.add(exposedTypeIds.getTypeIds(), TypeQueryItem::Write);
+			typeQueryList.add(exposedTypeIds, TypeQueryItem::Mode::Write);
 		}
 
 		~View()
@@ -32,14 +32,14 @@ namespace ecs
 		template <class ...Cs>
 		View with()
 		{
-			typeQueryList.add(ecs_->getTypeIds<Cs...>().getTypeIds(), TypeQueryItem::Required);
+			typeQueryList.add(ecs_->getTypeIds<Cs...>(), TypeQueryItem::Mode::Required);
 			return std::move(*this);
 		}
 
 		template <class ...Cs>
 		View exclude()
 		{
-			typeQueryList.add(ecs_->getTypeIds<Cs...>().getTypeIds(), TypeQueryItem::Exclude);
+			typeQueryList.add(ecs_->getTypeIds<Cs...>(), TypeQueryItem::Mode::Exclude);
 			return std::move(*this);
 		}
 
