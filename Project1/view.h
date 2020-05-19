@@ -46,9 +46,13 @@ namespace ecs
 	private:
 		void initializeData()
 		{
-			if (!data_)
-				data_ = &ecs_->get<Ts...>(typeQueryList, archetypes_);
+			if (!initialized_)
+			{
+				queriedChunks_ = ecs_->get<Ts...>(typeQueryList);
+				initialized_ = true;
+			}
 		}
+
 	public:
 		struct iterator
 		{
@@ -56,35 +60,29 @@ namespace ecs
 			iterator(View* v) : view(v)
 			{
 				view->initializeData();
-				auto& entityIds = std::get<std::vector<std::vector<entityId>*>>(*view->data_);
-				if (entityIds.size() > 0)
+				if (view->queriedChunks_.size() > 0)
 				{
-					vectorIndex = 0;
-					if (entityIds[vectorIndex]->size() > 0)
-						elementIndex = 0;
+					chunkIndex = 0;
+					entityIndex = 0;
 				}
 			}
 
 			iterator& operator++()
 			{
-				auto& entityIds = std::get<std::vector<std::vector<entityId>*>>(*view->data_);
-				if ((int)entityIds[vectorIndex]->size() - 1 > elementIndex)
+				if (view->queriedChunks_[chunkIndex].entityCount - 1 > entityIndex)
 				{
-					elementIndex++;
+					entityIndex++;
 				}
 				else
 				{
-					if ((int)entityIds.size() - 1 > vectorIndex)
+					if ((int)view->queriedChunks_.size() - 1 > chunkIndex)
 					{
-						vectorIndex++;
-						if (entityIds[vectorIndex]->size() > 0)
-							elementIndex = 0;
-						else
-							elementIndex = -1;
+						chunkIndex++;
+						entityIndex = 0;
 					}
 					else
 					{
-						vectorIndex = -1;
+						chunkIndex = -1;
 					}
 				}
 				return *this;
@@ -95,7 +93,7 @@ namespace ecs
 				if (!isValid() && !rhs.isValid())
 					return true;
 
-				return (vectorIndex == rhs.vectorIndex && elementIndex == rhs.elementIndex);
+				return (chunkIndex == rhs.chunkIndex && entityIndex == rhs.entityIndex);
 			}
 
 			bool operator!=(const iterator& rhs) const
@@ -105,46 +103,40 @@ namespace ecs
 
 			bool isValid() const
 			{
-				return vectorIndex >= 0 && elementIndex >= 0;
+				return chunkIndex >= 0 && entityIndex >= 0;
 			}
 
 			entityId getId() const
 			{
 				auto& vectors = std::get<std::vector<std::vector<entityId>*>>(*view->data_);
-				elementOut = (*vectors[vectorIndex])[elementIndex];
+				elementOut = (*vectors[chunkIndex])[entityIndex];
 			}
 
 			template<class ...Ts>
 			bool hasComponents() const
 			{
-				return getCurrentArchetype()->containedTypes_.hasAllTypes(view->ecs_->getTypeIds<Ts...>());
+				return view->queriedChunks_[chunkIndex].chunk->archetype->containedTypes_.hasAllTypes(view->ecs_->getTypeIds<Ts...>());
 			}
 
 			std::tuple<const iterator&, const entityId&, Ts &...> operator*()
 			{
-				return getCurrentTuple();
+				auto a = std::index_sequence_for<Ts...>();
+				return getCurrentTuple(a);
 			}
 
-			template<class T>
-			T& getCurrentItem()
+			template<size_t... Is>
+			std::tuple<const iterator&, const entityId&, Ts&...> getCurrentTuple(std::index_sequence<Is...>)
 			{
-				auto& vectors = std::get<std::vector<std::vector<std::decay_t<T>>*>>(*view->data_);
-				return (*vectors[vectorIndex])[elementIndex];
-			}
-
-			std::tuple<const iterator&, const entityId&, Ts &...> getCurrentTuple()
-			{
-				return { *this, getCurrentItem<const entityId>(), getCurrentItem<Ts>()... };
-			}
-
-			Archetype* getCurrentArchetype() const
-			{
-				return (*view->archetypes_)[vectorIndex];
+				return {
+					*this,
+					reinterpret_cast<const entityId*>(view->queriedChunks_[chunkIndex].buffers[0])[entityIndex],
+					reinterpret_cast<Ts*>(view->queriedChunks_[chunkIndex].buffers[Is + 1])[entityIndex]...
+				};
 			}
 
 			View* view = nullptr;
-			int vectorIndex = -1;
-			int elementIndex = -1;
+			int chunkIndex = -1;
+			int entityIndex = -1;
 		};
 
 		iterator begin() {
@@ -219,9 +211,10 @@ namespace ecs
 		{
 			initializeData();
 			size_t count = 0;
-			const std::vector<std::vector<entityId>*>& entityIdArrays = std::get<0>(*data_);
-			for (auto& v : entityIdArrays)
-				count += v->size();
+			for (auto& chunk : queriedChunks_)
+			{
+				count += chunk.entityCount;
+			}
 
 			return count;
 		}
@@ -229,7 +222,8 @@ namespace ecs
 		Ecs* ecs_;
 		typeQueryList typeQueryList;
 		std::vector<Archetype*>* archetypes_ = nullptr;
-		const std::tuple<std::vector<std::vector<entityId>*>, std::vector<std::vector<std::decay_t<Ts>>*>...>* data_ = nullptr;
+		std::vector<Ecs::QueriedChunk<sizeof...(Ts)>> queriedChunks_;
+		bool initialized_ = false;
 		bool autoExecuteCommandBuffer_ = true;
 	};
 

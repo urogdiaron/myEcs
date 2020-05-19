@@ -21,51 +21,51 @@ namespace ecs
 		template<typename...>
 		friend struct EntityCommand_Create;
 
-		template<class T>
-		void get_impl(const typeQueryList& typeIds, const std::vector<Archetype*>& matchingArchetypes, std::vector<std::vector<T>*>& out)
+		template<size_t ComponentCount>
+		struct QueriedChunk
 		{
-			out.clear();
-			for (auto& itArchetype : matchingArchetypes)
-			{
-				ComponentArrayBase* componentArray = itArchetype->get(getTypeId<T>());
-				if (componentArray)
-				{
-					out.push_back(&static_cast<ComponentArray<T>*>(componentArray)->components_);
-				}
-			}
-		}
-
-		template<>
-		void get_impl(const typeQueryList& typeIds, const std::vector<Archetype*>& matchingArchetypes, std::vector<std::vector<entityId>*>& out)
-		{
-			out.clear();
-			for (auto& itArchetype : matchingArchetypes)
-			{
-				out.push_back(&itArchetype->entityIds_);
-			}
-		}
-
-		template<class T, class ...Ts>
-		void get_impl(const typeQueryList& typeIds, const std::vector<Archetype*>& matchingArchetypes, std::vector<std::vector<T>*>& out, std::vector<std::vector<Ts>*>&... restOut)
-		{
-			get_impl(typeIds, matchingArchetypes, out);
-			get_impl(typeIds, matchingArchetypes, restOut...);
-		}
+			int entityCount;	// this exists in the chunk but for efficiency we copy it out here
+			std::array<uint8_t*, ComponentCount + 1> buffers;
+			Chunk* chunk;
+		};
 
 		template<class ...Ts>
-		const std::tuple<std::vector<std::vector<entityId>*>, std::vector<std::vector<std::decay_t<Ts>>*>...>& get(const typeQueryList& typeIds, std::vector<Archetype*>*& archetypesOut)
+		std::vector<QueriedChunk<sizeof...(Ts)>> get(const typeQueryList& typeIds)
 		{
-			static std::tuple<std::vector<std::vector<entityId>*>, std::vector<std::vector<std::decay_t<Ts>>*>...> ret = {};
-			static std::vector<Archetype*> archetypesStatic;
-			archetypesStatic.clear();
-			for (auto& archetype : archetypes_)
-			{
-				if (archetype->hasAllComponents(typeIds) && archetype->entityIds_.size() > 0)
-					archetypesStatic.push_back(archetype.get());
-			}
+			std::vector<QueriedChunk<sizeof...(Ts)>> ret;
+			ret.reserve(10);
 
-			std::apply([&](auto& ...x) { get_impl(typeIds, archetypesStatic, x...); }, ret);
-			archetypesOut = &archetypesStatic;
+			if constexpr (sizeof...(Ts) > 0)
+			{
+				typeId typeIdsToGet[] = { getTypeId<Ts>()... };
+				for (auto& archetype : archetypes_)
+				{
+					if (archetype->hasAllComponents(typeIds) && archetype->entityIds_.size() > 0)
+					{
+						auto& queriedChunk = ret.emplace_back();
+						queriedChunk.chunk = &archetype->chunk;
+						queriedChunk.entityCount = archetype->chunk.size;
+						queriedChunk.buffers[0] = &archetype->chunk.buffer[0];	// the first buffer is the entity ids
+						for (int i = 0; i < (int)sizeof...(Ts); i++)
+						{
+							queriedChunk.buffers[i + 1] = archetype->chunk.getArray(typeIdsToGet[i])->buffer;
+						}
+					}
+				}
+			}
+			else
+			{
+				for (auto& archetype : archetypes_)
+				{
+					if (archetype->hasAllComponents(typeIds) && archetype->entityIds_.size() > 0)
+					{
+						auto& queriedChunk = ret.emplace_back();
+						queriedChunk.chunk = &archetype->chunk;
+						queriedChunk.entityCount = archetype->chunk.size;
+						queriedChunk.buffers[0] = &archetype->chunk.buffer[0];	// the first buffer is the entity ids
+					}
+				}
+			}
 			return ret;
 		}
 
@@ -130,6 +130,8 @@ namespace ecs
 
 			auto& typeDesc = typeDescriptors_.emplace_back(std::make_unique<TypeDescriptor>());
 			typeDesc->index = (int)typeDescriptors_.size() - 1;
+			typeDesc->size = sizeof(T);
+			typeDesc->alignment = alignof(T);
 			typeDesc->type = componentType;
 			typeDesc->name = name;
 			componentArrayFactory_.addFactoryFunction<T>(typeDesc.get());
@@ -291,27 +293,25 @@ namespace ecs
 			if (it == entityDataIndexMap_.end())
 				return nullptr;
 
-			auto itComponentArray = archetypes_[it->second.archetypeIndex]->componentArrays_.find(getTypeId<T>());
-			if (itComponentArray == archetypes_[it->second.archetypeIndex]->componentArrays_.end())
-			{
+			auto componentArray = archetypes_[it->second.archetypeIndex]->chunk.getArray(getTypeId<T>());
+			if (!componentArray)
 				return nullptr;
-			}
 
-			return &static_cast<ComponentArray<T>*>(itComponentArray->second.get())->components_[it->second.elementIndex];
+			return static_cast<ComponentArray<T>*>(componentArray)->getElement(it->second.elementIndex);
 		}
 
 private:
 		template<class T>
 		void getComponents_impl(entityId id, Archetype* archetype, int elementIndex, T*& out)
 		{
-			auto itComponentArray = archetype->componentArrays_.find(getTypeId<T>());
-			if (itComponentArray == archetype->componentArrays_.end())
+			auto componentArray = archetype->chunk.getArray(getTypeId<T>());
+			if (!componentArray)
 			{
 				out = nullptr;
 				return;
 			}
 
-			out = &static_cast<ComponentArray<T>*>(itComponentArray->second.get())->components_[elementIndex];
+			out = static_cast<ComponentArray<T>*>(componentArray)->getElement(elementIndex);
 		}
 
 		template<class T, class... Ts>
@@ -381,6 +381,7 @@ public:
 
 		void save(std::ostream& stream) const
 		{
+#if 0
 			size_t count = typeDescriptors_.size();
 			stream.write((char*)&count, sizeof(size_t));
 			for (auto& t : typeDescriptors_)
@@ -477,10 +478,12 @@ public:
 			}
 
 			stream.write((char*)&nextEntityId, sizeof(nextEntityId));
+#endif
 		}
 
 		void load(std::istream& stream)
 		{
+#if 0
 			entityDataIndexMap_.clear();
 			archetypes_.clear();
 			entityCommandBuffer_.clear();
@@ -526,6 +529,7 @@ public:
 			}
 
 			stream.read((char*)&nextEntityId, sizeof(nextEntityId));
+#endif
 		}
 
 		ComponentArrayFactory componentArrayFactory_;

@@ -54,6 +54,8 @@ namespace ecs
 	struct TypeDescriptor
 	{
 		typeIndex index;
+		int size;
+		int alignment;
 		ComponentType type;
 		std::string name;
 	};
