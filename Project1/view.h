@@ -1,5 +1,10 @@
 #pragma once
+#include "ecs_util.h"
+#include "component_array.h"
+#include "archetype.h"
 #include "ecs.h"
+#include "archetype_impl.h"
+#include "ecs_impl.h"
 #include "entitycommand.h"
 
 namespace ecs

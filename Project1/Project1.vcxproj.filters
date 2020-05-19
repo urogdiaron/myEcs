@@ -15,14 +15,6 @@
     </Filter>
   </ItemGroup>
   <ItemGroup>
-    <ClCompile Include="main.cpp">
-      <Filter>Source Files</Filter>
-    </ClCompile>
-  </ItemGroup>
-  <ItemGroup>
-    <ClInclude Include="self_register.h">
-      <Filter>Source Files</Filter>
-    </ClInclude>
     <ClInclude Include="ecs_util.h">
       <Filter>Source Files</Filter>
     </ClInclude>
@@ -39,6 +31,12 @@
       <Filter>Source Files</Filter>
     </ClInclude>
     <ClInclude Include="entitycommand.h">
+      <Filter>Source Files</Filter>
+    </ClInclude>
+    <ClInclude Include="archetype_impl.h">
+      <Filter>Source Files</Filter>
+    </ClInclude>
+    <ClInclude Include="ecs_impl.h">
       <Filter>Source Files</Filter>
     </ClInclude>
   </ItemGroup>
