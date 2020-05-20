@@ -21,7 +21,7 @@ namespace ecs
 			i++;
 		}
 
-		auto& insertedItem = archetypes_.emplace_back(std::make_unique<Archetype>(typeIds, this));
+		auto& insertedItem = archetypes_.emplace_back(std::make_unique<Archetype>(typeIds, i, this));
 		return { i, insertedItem.get() };
 	}
 	
@@ -29,8 +29,8 @@ namespace ecs
 	{
 		entityId newEntityId = nextEntityId++;
 		auto [archIndex, archetype] = createArchetype(typeIds);
-		int elementIndex = archetype->createEntity(newEntityId);
-		entityDataIndexMap_[newEntityId] = { archIndex, elementIndex };
+		entityDataIndex newIndex = archetype->createEntity(newEntityId);
+		entityDataIndexMap_[newEntityId] = newIndex;
 		return newEntityId;
 	}
 
@@ -41,7 +41,8 @@ namespace ecs
 		if (it == entityDataIndexMap_.end())
 			return false;
 
-		Archetype* arch = archetypes_[it->second.archetypeIndex].get();
+		entityDataIndex entityIndex = it->second;
+		Archetype* arch = archetypes_[entityIndex.archetypeIndex].get();
 
 		if (keepStateComponents)
 		{
@@ -60,20 +61,11 @@ namespace ecs
 		}
 
 		// Delete the entity and clean up the map indices
-		arch->deleteEntity(it->second.elementIndex);
-
-		for (int i = it->second.elementIndex; i < (int)arch->entityIds_.size(); i++)
-		{
-			entityId changedId = arch->entityIds_[i];
-			auto changedIt = entityDataIndexMap_.find(changedId);
-			if (changedIt != entityDataIndexMap_.end())
-			{
-				changedIt->second.elementIndex = i;
-			}
-		}
-
+		entityId movedEntity = arch->deleteEntity(entityIndex);
 		entityDataIndexMap_.erase(it);
 
+		if (movedEntity)
+			entityDataIndexMap_[movedEntity] = entityIndex;
 		return true;
 	}
 	
@@ -110,9 +102,9 @@ namespace ecs
 		if (archetype == oldArchetype)
 			return;
 
-		int newElementIndex = archetype->copyFromEntity(id, it->second.elementIndex, oldArchetype);
+		entityDataIndex newElementIndex = archetype->moveFromEntity(id, it->second);
 		deleteEntity(id, false);
-		entityDataIndexMap_[id] = { archIndex, newElementIndex };
+		entityDataIndexMap_[id] = newElementIndex;
 	}
 	
 	typeId Ecs::getTypeIdByName(const std::string& typeName)

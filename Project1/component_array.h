@@ -150,30 +150,40 @@ namespace ecs
 			}
 		}
 
-		void createEntity(entityId id)
+		int createEntity(entityId id)
 		{
+			int ret = size;
 			getEntityIds()[size] = id;
 			for (auto& componentArray : componentArrays)
 			{
 				componentArray->createEntity(size);
 			}
 			size++;
+			return ret;
 		}
 
-		void deleteEntity(int elementIndex)
+		// return value is the entity id that was moved to this position
+		entityId deleteEntity(int elementIndex)
 		{
 			size--;
+			if (size == 0)
+				return 0;
+
 			entityId* entityIds = getEntityIds();
-			entityIds[elementIndex] = entityIds[size];
+			entityId movedEntityId = entityIds[size];
+			entityIds[elementIndex] = movedEntityId;
 
 			for (auto& componentArray : componentArrays)
 			{
 				componentArray->deleteEntity(elementIndex, size);
 			}
+
+			return movedEntityId;
 		}
 
-		void moveEntityFromOtherChunk(Chunk* sourceChunk, int sourceElementIndex)
+		int moveEntityFromOtherChunk(Chunk* sourceChunk, int sourceElementIndex)
 		{
+			int ret = size;
 			entityId* destEntityIds = getEntityIds();
 			entityId* sourceEntityIds = sourceChunk->getEntityIds();
 			destEntityIds[size] = sourceEntityIds[sourceElementIndex];
@@ -192,6 +202,7 @@ namespace ecs
 				}
 			}
 			size++;
+			return ret;
 		}
 
 		entityId* getEntityIds()

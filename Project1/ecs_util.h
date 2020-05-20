@@ -65,6 +65,13 @@ namespace ecs
 
 #define DEBUG_TYPEIDLISTS
 
+	struct entityDataIndex
+	{
+		int archetypeIndex;
+		int chunkIndex;
+		int elementIndex;
+	};
+
 	struct typeIdList
 	{
 		typeIdList(size_t totalTypeCount, std::initializer_list<typeId> tids)

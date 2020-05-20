@@ -9,45 +9,70 @@ namespace ecs
 {
 	Archetype::Archetype()
 		: containedTypes_(1, {})
+		, archetypeIndex(-1)
 	{}
 	
-	Archetype::Archetype(const typeIdList& typeIds, Ecs* ecs)
+	Archetype::Archetype(const typeIdList& typeIds, int archetypeIndex, Ecs* ecs)
 		: containedTypes_(typeIds)
-		, chunk(this, typeIds.calcTypeIds(ecs->typeIds_), ecs->componentArrayFactory_)
+		, archetypeIndex(archetypeIndex)
+		, ecs(ecs)
 	{
 	}
 	
-	ComponentArrayBase* Archetype::get(typeId tid)
+	ComponentArrayBase* Archetype::get_(typeId tid)
 	{
-		return chunk.getArray(tid);
+		return nullptr;// chunk.getArray(tid);
 	}
 	
-	int Archetype::createEntity(entityId id)
+	entityDataIndex Archetype::createEntity(entityId id)
 	{
-		int newIndex = (int)entityIds_.size();
-		entityIds_.push_back(id);
-		chunk.createEntity(id);
+		entityDataIndex ret;
+		ret.archetypeIndex = archetypeIndex;
+		auto [chunk, chunkIndex] = getOrCreateChunkForNewEntity();
+		ret.chunkIndex = chunkIndex;
+		ret.elementIndex = chunk->createEntity(id);
+		return ret;
+	}
+	
+	entityId Archetype::deleteEntity(const entityDataIndex& index)
+	{
+		_ASSERT(index.archetypeIndex == archetypeIndex);
+		Chunk* chunk = chunks[index.chunkIndex].get();
+		entityId movedEntityId = chunk->deleteEntity(index.elementIndex);
+		return movedEntityId;
+	}
+	
+	entityDataIndex Archetype::moveFromEntity(entityId id, const entityDataIndex& sourceIndex)
+	{
+		Archetype* sourceArchetype = ecs->archetypes_[sourceIndex.archetypeIndex].get();
+		Chunk* sourceChunk = sourceArchetype->chunks[sourceIndex.chunkIndex].get();
 
-		return newIndex;
-	}
-	
-	void Archetype::deleteEntity(int elementIndex)
-	{
-		deleteFromVectorUnsorted(entityIds_, elementIndex);
-		chunk.deleteEntity(elementIndex);
-	}
-	
-	int Archetype::copyFromEntity(entityId id, int sourceElementIndex, Archetype* sourceArchetype)
-	{
-		chunk.moveEntityFromOtherChunk(&sourceArchetype->chunk, sourceElementIndex);
-		int newIndex = (int)entityIds_.size();
-		entityIds_.push_back(id);
-		return newIndex;
+		entityDataIndex ret;
+		ret.archetypeIndex = archetypeIndex;
+		auto [chunk, chunkIndex] = getOrCreateChunkForNewEntity();
+		ret.chunkIndex = chunkIndex;
+		ret.elementIndex = chunk->moveEntityFromOtherChunk(sourceChunk, sourceIndex.elementIndex);
+		return ret;
 	}
 	
 	bool Archetype::hasAllComponents(const typeQueryList& query) const
 	{
 		return query.check(containedTypes_);
+	}
+
+	std::tuple<Chunk*, int> Archetype::getOrCreateChunkForNewEntity()
+	{
+		int chunkIndex = (int)chunks.size() - 1;
+		if (chunkIndex < 0 || 
+			(chunks[chunkIndex]->entityCapacity == chunks[chunkIndex]->size))
+		{
+			auto& retPtr = chunks.emplace_back(
+				std::make_unique<Chunk>(this, containedTypes_.calcTypeIds(ecs->typeIds_), ecs->componentArrayFactory_)
+			);
+			return { retPtr.get(), chunkIndex + 1 };
+		}
+
+		return { chunks[chunkIndex].get(), chunkIndex };
 	}
 	
 	void Archetype::save(std::ostream& stream) const

@@ -35,15 +35,21 @@ namespace ecs
 				typeId typeIdsToGet[] = { getTypeId<Ts>()... };
 				for (auto& archetype : archetypes_)
 				{
-					if (archetype->hasAllComponents(typeIds) && archetype->entityIds_.size() > 0)
+					if (archetype->hasAllComponents(typeIds))
 					{
-						auto& queriedChunk = ret.emplace_back();
-						queriedChunk.chunk = &archetype->chunk;
-						queriedChunk.entityCount = archetype->chunk.size;
-						queriedChunk.buffers[0] = &archetype->chunk.buffer[0];	// the first buffer is the entity ids
-						for (int i = 0; i < (int)sizeof...(Ts); i++)
+						for (auto& chunk : archetype->chunks)
 						{
-							queriedChunk.buffers[i + 1] = archetype->chunk.getArray(typeIdsToGet[i])->buffer;
+							if (chunk->size == 0)
+								continue;
+
+							auto& queriedChunk = ret.emplace_back();
+							queriedChunk.chunk = chunk.get();
+							queriedChunk.entityCount = queriedChunk.chunk->size;
+							queriedChunk.buffers[0] = &queriedChunk.chunk->buffer[0];	// the first buffer is the entity ids
+							for (int i = 0; i < (int)sizeof...(Ts); i++)
+							{
+								queriedChunk.buffers[i + 1] = queriedChunk.chunk->getArray(typeIdsToGet[i])->buffer;
+							}
 						}
 					}
 				}
@@ -52,12 +58,18 @@ namespace ecs
 			{
 				for (auto& archetype : archetypes_)
 				{
-					if (archetype->hasAllComponents(typeIds) && archetype->entityIds_.size() > 0)
+					if (archetype->hasAllComponents(typeIds))
 					{
-						auto& queriedChunk = ret.emplace_back();
-						queriedChunk.chunk = &archetype->chunk;
-						queriedChunk.entityCount = archetype->chunk.size;
-						queriedChunk.buffers[0] = &archetype->chunk.buffer[0];	// the first buffer is the entity ids
+						for (auto& chunk : archetype->chunks)
+						{
+							if (chunk->size == 0)
+								continue;
+
+							auto& queriedChunk = ret.emplace_back();
+							queriedChunk.chunk = chunk.get();
+							queriedChunk.entityCount = queriedChunk.chunk->size;
+							queriedChunk.buffers[0] = &queriedChunk.chunk->buffer[0];	// the first buffer is the entity ids
+						}
 					}
 				}
 			}
@@ -177,13 +189,9 @@ namespace ecs
 			if (it == entityDataIndexMap_.end())
 				return false;
 
-			auto itComponentArray = archetypes_[it->second.archetypeIndex]->componentArrays_.find(getTypeId<T>());
-			if (itComponentArray == archetypes_[it->second.archetypeIndex]->componentArrays_.end())
-			{
-				return false;
-			}
-
-			return true;
+			typeQueryList queryList(typeDescriptors_.size());
+			queryList.add(getTypeIds<T>(), TypeQueryItem::Mode::Read);
+			return archetypes_[it->second.archetypeIndex]->hasAllComponents(queryList);
 		}
 
 		template<class T>
@@ -193,18 +201,24 @@ namespace ecs
 			if (it == entityDataIndexMap_.end())
 				return nullptr;
 
-			auto componentArray = archetypes_[it->second.archetypeIndex]->chunk.getArray(getTypeId<T>());
+			entityDataIndex entityIndex = it->second;
+			Archetype* archetype = archetypes_[entityIndex.archetypeIndex].get();
+			Chunk* chunk = archetype->chunks[entityIndex.chunkIndex].get();
+			ComponentArrayBase* componentArray = chunk->getArray(getTypeId<T>());
 			if (!componentArray)
 				return nullptr;
 
 			return static_cast<ComponentArray<T>*>(componentArray)->getElement(it->second.elementIndex);
 		}
 
+		typeId getTypeIdByName(const std::string& typeName);
+
 private:
+	private:
 		template<class T>
-		void getComponents_impl(entityId id, Archetype* archetype, int elementIndex, T*& out)
+		void getComponents_impl(Chunk* chunk, int elementIndex, T*& out)
 		{
-			auto componentArray = archetype->chunk.getArray(getTypeId<T>());
+			auto componentArray = chunk->getArray(getTypeId<T>());
 			if (!componentArray)
 			{
 				out = nullptr;
@@ -215,16 +229,13 @@ private:
 		}
 
 		template<class T, class... Ts>
-		void getComponents_impl(entityId id, Archetype* archetype, int elementIndex, T*& out, Ts*&... restOut)
+		void getComponents_impl(Chunk* chunk, int elementIndex, T*& out, Ts*&... restOut)
 		{
-			getComponents_impl(id, archetype, elementIndex, out);
-			getComponents_impl(id, archetype, elementIndex, restOut...);
+			getComponents_impl(chunk, elementIndex, out);
+			getComponents_impl(chunk, elementIndex, restOut...);
 		}
 
-		typeId getTypeIdByName(const std::string& typeName);
-
 public:
-
 		template<class... Ts>
 		std::tuple<Ts*...> getComponents(entityId id)
 		{
@@ -233,17 +244,12 @@ public:
 				return std::tuple<Ts *...>{};
 
 			Archetype* archetype = archetypes_[it->second.archetypeIndex].get();
+			Chunk* chunk = archetype->chunks[it->second.chunkIndex].get();
 
 			std::tuple<Ts*...> ret = {};
-			std::apply([&](auto& ...x) { getComponents_impl(id, archetype, it->second.elementIndex, x...); }, ret);
+			std::apply([&](auto& ...x) { getComponents_impl(chunk, it->second.elementIndex, x...); }, ret);
 			return ret;
 		}
-
-		struct entityDataIndex
-		{
-			int archetypeIndex;
-			int elementIndex;
-		};
 
 		void save(std::ostream& stream) const;
 		void load(std::istream& stream);
