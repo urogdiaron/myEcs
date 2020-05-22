@@ -117,49 +117,70 @@ namespace ecs
 		}
 
 		Chunk(struct Archetype* archetype, const std::vector<typeId>& typeIds, const ComponentArrayFactory& componentArrayFactory)
-			: componentArrays(typeIds.size())
-			, archetype(archetype)
+			: archetype(archetype)
 		{
 			buffer = {};
 
 			int maxAlign = (int)alignof(std::max_align_t);
 			int worstCaseCapacity = bufferCapacity - maxAlign * (int)typeIds.size();
+
 			int entitySize = sizeof(entityId);
+			int componentArrayCount = 0;
+			int sharedComponentCount = 0;
 			for (auto& t : typeIds)
 			{
-				entitySize += t->size;
+				if (t->type != ComponentType::Shared)
+				{
+					entitySize += t->size;
+					componentArrayCount++;
+				}
+				else
+				{
+					worstCaseCapacity -= t->size;	// we need to store one of the shared components at the end of our buffer
+					sharedComponentCount++;
+				}
 			}
 
-			entityCapacity = worstCaseCapacity / entitySize;
+			componentArrays.reserve(componentArrayCount);
+			sharedComponents.reserve(sharedComponentCount);
 
+			entityCapacity = worstCaseCapacity / entitySize;
 			int componentBufferOffset = 0;
 			
 			// in the beginning there are entity ids
 			componentBufferOffset += sizeof(entityId) * entityCapacity;
 
-			int i = 0;
 			for (auto& t : typeIds)
 			{
 				// align the offset to this type
 				int under = componentBufferOffset % t->alignment;
 				componentBufferOffset += ((t->alignment - under) % t->alignment);
 
-				componentArrays[i] = componentArrayFactory.create(t, &buffer[0] + componentBufferOffset);
-				componentBufferOffset += t->size * entityCapacity;
-				i++;
+
+				if (t->type == ComponentType::Shared)
+				{
+					auto& sharedComponentArray = sharedComponents.emplace_back(componentArrayFactory.create(t, &buffer[0] + componentBufferOffset));
+					sharedComponentArray->createEntity(0);
+					componentBufferOffset += t->size * 1;
+				}
+				else
+				{
+					componentArrays.emplace_back(componentArrayFactory.create(t, &buffer[0] + componentBufferOffset));
+					componentBufferOffset += t->size * entityCapacity;
+				}
 			}
 		}
 
 		int createEntity(entityId id)
 		{
-			int ret = size;
-			getEntityIds()[size] = id;
+			int entityIndex = size;
+			getEntityIds()[entityIndex] = id;
 			for (auto& componentArray : componentArrays)
 			{
-				componentArray->createEntity(size);
+				componentArray->createEntity(entityIndex);
 			}
 			size++;
-			return ret;
+			return entityIndex;
 		}
 
 		// return value is the entity id that was moved to this position
@@ -221,11 +242,35 @@ namespace ecs
 			return nullptr;
 		}
 
+		ComponentArrayBase* getSharedComponentArray(typeId tid)
+		{
+			for (auto& componentArray : sharedComponents)
+			{
+				if (componentArray->tid == tid)
+					return componentArray.get();
+			}
+
+			return nullptr;
+		}
+
+		template<class T>
+		T* getSharedComponent(typeId tid)
+		{
+			for (auto& componentArray : sharedComponents)
+			{
+				if (componentArray->tid == tid)
+					return static_cast<ComponentArray<T>*>(componentArray.get())->getElement(0);
+			}
+
+			return nullptr;
+		}
+
 		static inline const int bufferCapacity = 1 << 14;	// 16k chunks
 
 		alignas(entityId)
 		std::array<uint8_t, bufferCapacity> buffer;
 		std::vector<std::unique_ptr<ComponentArrayBase>> componentArrays;
+		std::vector<std::unique_ptr<ComponentArrayBase>> sharedComponents;
 
 		int size = 0;
 		int entityCapacity;

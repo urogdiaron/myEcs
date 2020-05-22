@@ -12,6 +12,7 @@ namespace ecs
 	private:
 		template<typename...>
 		friend struct View;
+		friend struct Archetype;
 		
 		template<typename...>
 		friend struct EntityCommand_Create;
@@ -130,6 +131,15 @@ namespace ecs
 			T* comp = getComponent<T>(id);
 			if (comp)
 				*comp = value;
+		}
+
+		template<class T>
+		void setSharedComponent(entityId id, const T& value)
+		{
+			entityDataIndex entityIndex = entityDataIndexMap_[id];
+			Archetype* archetype = archetypes_[entityIndex.archetypeIndex].get();
+			entityIndex = archetype->setSharedComponent(id, entityIndex, value);
+			entityDataIndexMap_[id] = entityIndex;
 		}
 
 		template<class ...Ts>

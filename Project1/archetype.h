@@ -18,6 +18,9 @@ namespace ecs
 
 		std::tuple<Chunk*, int> getOrCreateChunkForNewEntity();
 
+		template<class T>
+		entityDataIndex setSharedComponent(entityId id, entityDataIndex currentIndex, const T& sharedComponentValue);
+
 		void save(std::ostream& stream) const;
 		void load(std::istream& stream, const typeIdList& typeIds, const std::vector<typeId>& allRegisterTypeIds, const ComponentArrayFactory& componentFactory);
 

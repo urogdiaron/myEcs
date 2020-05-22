@@ -40,10 +40,24 @@ namespace ecs
 		stream.read((char*)v.data(), count * sizeof(T));
 	}
 
+	template<class T>
+	bool equals(const T& a, const T& b)
+	{
+		if constexpr (std::is_trivially_copyable_v<T>)
+		{
+			return memcmp(&a, &b, sizeof(T)) == 0;
+		}
+		else
+		{
+			return a == b;
+		}
+	}
+
 	enum class ComponentType
 	{
 		Regular,
 		DontSave,
+		Shared,
 		State,		// Not saved, entity deletion keeps these alive
 		Internal	// For internal use
 	};
@@ -62,8 +76,9 @@ namespace ecs
 
 	using typeId = TypeDescriptor*;
 
-
+#ifdef _DEBUG
 #define DEBUG_TYPEIDLISTS
+#endif
 
 	struct entityDataIndex
 	{
@@ -328,12 +343,11 @@ namespace ecs
 			bitField[byteIndex] &= ~(1 << bitIndex);
 		}
 
-		//std::vector<uint8_t> bitField;
-		std::array<uint8_t, 4> bitField = {};
-
 #ifdef DEBUG_TYPEIDLISTS
 		std::vector<typeId> typeIds;
 #endif
+		//std::vector<uint8_t> bitField;
+		std::array<uint8_t, 4> bitField = {};
 	};
 
 	struct TypeQueryItem

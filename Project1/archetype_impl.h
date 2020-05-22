@@ -108,4 +108,53 @@ namespace ecs
 		//	componentArrays_[t] = std::move(componentArray);
 		//}
 	}
+
+	template<class T>
+	entityDataIndex Archetype::setSharedComponent(entityId id, entityDataIndex currentIndex, const T& newSharedComponentValue)
+	{
+		Chunk* currentChunk = chunks[currentIndex.chunkIndex].get();
+		typeId sharedComponentType = ecs->getTypeId<T>();
+		const T* originalSharedComponent = currentChunk->getSharedComponent<T>(sharedComponentType);
+		if (equals(*originalSharedComponent, newSharedComponentValue))
+		{	// no need to change anything
+			return currentIndex;
+		}
+
+		// we need to get the chunk this belongs to or create a new one
+		Chunk* newChunk = nullptr;
+		int newChunkIndex = -1;
+		for (int iChunk = 0; iChunk < (int)chunks.size(); iChunk++)
+		{
+			Chunk* c = chunks[iChunk].get();
+			const T* sharedValue = c->getSharedComponent<T>(sharedComponentType);
+			if (equals(*sharedValue, newSharedComponentValue))
+			{
+				if (c->entityCapacity > c->size)
+				{
+					newChunk = c;
+					newChunkIndex = iChunk;
+					break;
+				}
+			}
+		}
+
+		if (newChunk == nullptr)
+		{
+			auto& newChunkPtr = chunks.emplace_back(
+				std::make_unique<Chunk>(this, containedTypes_.calcTypeIds(ecs->typeIds_), ecs->componentArrayFactory_)
+			);
+			T* sharedValue = newChunkPtr->getSharedComponent<T>(sharedComponentType);
+			*sharedValue = newSharedComponentValue;
+			newChunk = newChunkPtr.get();
+			newChunkIndex = (int)chunks.size() - 1;
+		}
+
+		int newElementIndex = newChunk->moveEntityFromOtherChunk(currentChunk, currentIndex.elementIndex);
+		entityDataIndex ret;
+		ret.archetypeIndex = currentIndex.archetypeIndex;
+		ret.chunkIndex = newChunkIndex;
+		ret.elementIndex = newElementIndex;
+
+		return ret;
+	}
 }
