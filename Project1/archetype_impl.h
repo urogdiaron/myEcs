@@ -129,6 +129,24 @@ namespace ecs
 			const T* sharedValue = c->getSharedComponent<T>(sharedComponentType);
 			if (equals(*sharedValue, newSharedComponentValue))
 			{
+				// Check all the other shared values
+				bool allSharedComponentsAreEqual = true;
+				for (int iSharedType = 0; iSharedType < (int)currentChunk->sharedComponents.size(); iSharedType++)
+				{	
+					auto componentToCheck = c->sharedComponents[iSharedType].get();
+					if (componentToCheck->tid == sharedComponentType)
+						continue;
+
+					if (!componentToCheck->isSameAsSharedComponent(currentChunk->sharedComponents[iSharedType].get()))
+					{
+						allSharedComponentsAreEqual = false;
+						break;
+					}
+				}
+
+				if (!allSharedComponentsAreEqual)
+					continue;
+
 				if (c->entityCapacity > c->size)
 				{
 					newChunk = c;
@@ -143,13 +161,25 @@ namespace ecs
 			auto& newChunkPtr = chunks.emplace_back(
 				std::make_unique<Chunk>(this, containedTypes_.calcTypeIds(ecs->typeIds_), ecs->componentArrayFactory_)
 			);
+
+			// Copy all other shared component from the current chunk to the new one
+			for (int iSharedType = 0; iSharedType < (int)currentChunk->sharedComponents.size(); iSharedType++)
+			{
+				auto componentToCopy = currentChunk->sharedComponents[iSharedType].get();
+				if (componentToCopy->tid == sharedComponentType)
+					continue;
+
+				newChunkPtr->sharedComponents[iSharedType]->copyFromArray(0, componentToCopy, 0);
+			}
+
 			T* sharedValue = newChunkPtr->getSharedComponent<T>(sharedComponentType);
 			*sharedValue = newSharedComponentValue;
 			newChunk = newChunkPtr.get();
 			newChunkIndex = (int)chunks.size() - 1;
 		}
 
-		int newElementIndex = newChunk->moveEntityFromOtherChunk(currentChunk, currentIndex.elementIndex);
+		int newElementIndex = newChunk->moveEntityFromOtherChunk(currentChunk, currentIndex.elementIndex, sharedComponentType);
+		currentChunk->deleteEntity(currentIndex.elementIndex);
 		entityDataIndex ret;
 		ret.archetypeIndex = currentIndex.archetypeIndex;
 		ret.chunkIndex = newChunkIndex;

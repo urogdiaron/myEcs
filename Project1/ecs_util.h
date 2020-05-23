@@ -6,6 +6,21 @@
 
 namespace ecs
 {
+	namespace detail
+	{
+		template<typename L, typename R>
+		struct has_operator_equals_impl
+		{
+			template<typename T = L, typename U = R> // template parameters here to enable SFINAE
+			static auto test(T&& t, U&& u) -> decltype(t == u, void(), std::true_type{});
+			static auto test(...)->std::false_type;
+			using type = decltype(test(std::declval<L>(), std::declval<R>()));
+		};
+	} // namespace detail
+
+	template<typename L, typename R = L>
+	struct has_operator_equals : detail::has_operator_equals_impl<L, R>::type {};
+
 	template<class T>
 	void makeVectorUniqueAndSorted(std::vector<T>& v)
 	{
@@ -43,7 +58,7 @@ namespace ecs
 	template<class T>
 	bool equals(const T& a, const T& b)
 	{
-		if constexpr (std::is_trivially_copyable_v<T>)
+		if constexpr (!has_operator_equals<T>::value)
 		{
 			return memcmp(&a, &b, sizeof(T)) == 0;
 		}

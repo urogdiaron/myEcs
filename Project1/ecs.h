@@ -49,6 +49,7 @@ namespace ecs
 							queriedChunk.buffers[0] = &queriedChunk.chunk->buffer[0];	// the first buffer is the entity ids
 							for (int i = 0; i < (int)sizeof...(Ts); i++)
 							{
+								_ASSERT_EXPR(typeIdsToGet[i]->type != ComponentType::Shared, L"Use getSharedComponent on the iterator if you want to read a shared component!");
 								queriedChunk.buffers[i + 1] = queriedChunk.chunk->getArray(typeIdsToGet[i])->buffer;
 							}
 						}
@@ -128,9 +129,17 @@ namespace ecs
 		template<class T>
 		void setComponent(entityId id, const T& value)
 		{
-			T* comp = getComponent<T>(id);
-			if (comp)
-				*comp = value;
+			typeId componentTypeId = getTypeId<T>();
+			if (componentTypeId->type != ComponentType::Shared)
+			{
+				T* comp = getComponent<T>(id);
+				if (comp)
+					*comp = value;
+			}
+			else
+			{
+				setSharedComponent(id, value);
+			}
 		}
 
 		template<class T>
@@ -214,7 +223,9 @@ namespace ecs
 			entityDataIndex entityIndex = it->second;
 			Archetype* archetype = archetypes_[entityIndex.archetypeIndex].get();
 			Chunk* chunk = archetype->chunks[entityIndex.chunkIndex].get();
-			ComponentArrayBase* componentArray = chunk->getArray(getTypeId<T>());
+			typeId componentTypeId = getTypeId<T>();
+			_ASSERT_EXPR(componentTypeId->type != ComponentType::Shared, L"Use the chunk's getSharedComponent for shared components!");
+			ComponentArrayBase* componentArray = chunk->getArray(componentTypeId);
 			if (!componentArray)
 				return nullptr;
 

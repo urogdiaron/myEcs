@@ -123,6 +123,12 @@ namespace ecs
 				return view->queriedChunks_[chunkIndex].chunk->archetype->containedTypes_.hasAllTypes(view->ecs_->getTypeIds<Ts...>());
 			}
 
+			template<class TSharedComp>
+			const TSharedComp* getSharedComponent() const
+			{
+				return view->queriedChunks_[chunkIndex].chunk->getSharedComponent<TSharedComp>(view->ecs_->getTypeId<TSharedComp>());
+			}
+
 			std::tuple<const iterator&, const entityId&, Ts &...> operator*()
 			{
 				auto a = std::index_sequence_for<Ts...>();

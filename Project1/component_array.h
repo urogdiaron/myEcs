@@ -10,10 +10,13 @@ namespace ecs
 		virtual ~ComponentArrayBase() {}
 		virtual void createEntity(int elementIndex) = 0;
 		virtual void deleteEntity(int elementIndex, int lastValidElementIndex) = 0;
+		virtual void copyFromArray(int sourceElementIndex, const ComponentArrayBase* sourceArray, int destElementIndex) = 0;
 		virtual void moveFromArray(int sourceElementIndex, const ComponentArrayBase* sourceArray, int destElementIndex) = 0;
 		virtual void save(std::ostream& stream) const = 0;
 		virtual void load(std::istream& stream, size_t count) = 0;
 		typeId getTypeId() { return tid; }
+
+		virtual bool isSameAsSharedComponent(const ComponentArrayBase* other) const = 0;
 
 		uint8_t* buffer;
 		int elementSize;
@@ -45,10 +48,38 @@ namespace ecs
 			tDestBuffer[destElementIndex] = std::move(tSourceBuffer[sourceElementIndex]);
 		}
 
+		void copyFromArray(int sourceElementIndex, const ComponentArrayBase* sourceArray, int destElementIndex) override
+		{
+			auto sourceArrayCasted = static_cast<const ComponentArray<T>*>(sourceArray);
+			auto tSourceBuffer = reinterpret_cast<T*>(sourceArrayCasted->buffer);
+			auto tDestBuffer = reinterpret_cast<T*>(buffer);
+			tDestBuffer[destElementIndex] = tSourceBuffer[sourceElementIndex];
+		}
+
 		T* getElement(int elementIndex)
 		{
 			auto tBuffer = reinterpret_cast<T*>(buffer);
 			return &tBuffer[elementIndex];
+		}
+
+		const T* getElement(int elementIndex) const
+		{
+			auto tBuffer = reinterpret_cast<const T*>(buffer);
+			return &tBuffer[elementIndex];
+		}
+
+		bool isSameAsSharedComponent(const ComponentArrayBase* other) const override
+		{
+			if (other->tid != tid)
+				return false;
+
+			if (tid->type != ComponentType::Shared)
+			{
+				_ASSERT(0);
+				return false;
+			}
+
+			return equals(*getElement(0), *static_cast<const ComponentArray<T>*>(other)->getElement(0));
 		}
 
 		void save(std::ostream& stream) const override
@@ -202,7 +233,7 @@ namespace ecs
 			return movedEntityId;
 		}
 
-		int moveEntityFromOtherChunk(Chunk* sourceChunk, int sourceElementIndex)
+		int moveEntityFromOtherChunk(Chunk* sourceChunk, int sourceElementIndex, typeId sharedComponentToKeep = nullptr)
 		{
 			int ret = size;
 			entityId* destEntityIds = getEntityIds();
@@ -220,6 +251,20 @@ namespace ecs
 				else
 				{
 					destArray->createEntity(size);
+				}
+			}
+
+			for (int iDestType = 0; iDestType < (int)sharedComponents.size(); iDestType++)
+			{
+				ComponentArrayBase* destArray = sharedComponents[iDestType].get();
+				if (destArray->tid == sharedComponentToKeep)
+				{
+					continue;
+				}
+				ComponentArrayBase* sourceArray = sourceChunk->getSharedComponentArray(destArray->tid);
+				if (sourceArray)
+				{
+					destArray->copyFromArray(0, sourceArray, 0);
 				}
 			}
 			size++;
