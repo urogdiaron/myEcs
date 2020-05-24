@@ -12,17 +12,34 @@ namespace ecs
 	std::tuple<int, Archetype*> Ecs::createArchetype(const typeIdList& typeIds)
 	{
 		int i = 0;
+		int firstEmptyIndex = -1;
 		for (auto& itArchetype : archetypes_)
 		{
-			if (itArchetype->containedTypes_ == typeIds)
+			if (itArchetype)
 			{
-				return { i, itArchetype.get() };
+				if (itArchetype->containedTypes_ == typeIds)
+				{
+					return { i, itArchetype.get() };
+				}
+			}
+			else if(firstEmptyIndex < 0)
+			{
+				firstEmptyIndex = i;
 			}
 			i++;
 		}
 
-		auto& insertedItem = archetypes_.emplace_back(std::make_unique<Archetype>(typeIds, i, this));
-		return { i, insertedItem.get() };
+		if (firstEmptyIndex >= 0)
+		{
+			archetypes_[firstEmptyIndex] = std::make_unique<Archetype>(typeIds, firstEmptyIndex, this);
+			return { firstEmptyIndex, archetypes_[firstEmptyIndex].get() };
+		}
+		else
+		{
+			auto& insertedItem = archetypes_.emplace_back(std::make_unique<Archetype>(typeIds, i, this));
+			return { i, insertedItem.get() };
+		}
+
 	}
 	
 	entityId Ecs::createEntity_impl(const typeIdList& typeIds)
@@ -63,6 +80,9 @@ namespace ecs
 		// Delete the entity and clean up the map indices
 		entityId movedEntity = arch->deleteEntity(entityIndex);
 		entityDataIndexMap_.erase(it);
+
+		if (arch->chunks.size() == 0)
+			deleteArchetype(entityIndex.archetypeIndex);
 
 		if (movedEntity)
 			entityDataIndexMap_[movedEntity] = entityIndex;
@@ -118,6 +138,19 @@ namespace ecs
 			return it->get();
 
 		return nullptr;
+	}
+
+	void Ecs::deleteArchetype(int archetypeIndex)
+	{
+		archetypes_[archetypeIndex].reset();
+		int lastValidArchetypeIndex = (int)archetypes_.size() - 1;
+		for (lastValidArchetypeIndex = (int)archetypes_.size() - 1; lastValidArchetypeIndex >= 0; lastValidArchetypeIndex--)
+		{
+			if (archetypes_[lastValidArchetypeIndex])
+				break;
+		}
+
+		archetypes_.erase(archetypes_.begin() + (lastValidArchetypeIndex + 1), archetypes_.end());
 	}
 	
 	void Ecs::save(std::ostream& stream) const

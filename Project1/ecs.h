@@ -36,7 +36,7 @@ namespace ecs
 				typeId typeIdsToGet[] = { getTypeId<Ts>()... };
 				for (auto& archetype : archetypes_)
 				{
-					if (archetype->hasAllComponents(typeIds))
+					if (archetype && archetype->hasAllComponents(typeIds))
 					{
 						for (auto& chunk : archetype->chunks)
 						{
@@ -60,7 +60,7 @@ namespace ecs
 			{
 				for (auto& archetype : archetypes_)
 				{
-					if (archetype->hasAllComponents(typeIds))
+					if (archetype && archetype->hasAllComponents(typeIds))
 					{
 						for (auto& chunk : archetype->chunks)
 						{
@@ -104,6 +104,8 @@ namespace ecs
 			static typeIdList ret = typeIdList((int)typeDescriptors_.size(), { getTypeId<Ts>()... });
 			return ret;
 		}
+
+		void deleteArchetype(int archetypeIndex);
 	public:
 
 		template<class T>
