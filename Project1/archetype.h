@@ -17,6 +17,7 @@ namespace ecs
 		bool hasAllComponents(const typeQueryList& query) const;
 
 		std::tuple<Chunk*, int> getOrCreateChunkForNewEntity();
+		std::tuple<Chunk*, int> getOrCreateChunkForMovedEntity(entityDataIndex currentIndex);
 
 		template<class T>
 		entityDataIndex setSharedComponent(entityId id, entityDataIndex currentIndex, const T& sharedComponentValue);

@@ -49,7 +49,7 @@ namespace ecs
 
 		entityDataIndex ret;
 		ret.archetypeIndex = archetypeIndex;
-		auto [chunk, chunkIndex] = getOrCreateChunkForNewEntity();
+		auto [chunk, chunkIndex] = getOrCreateChunkForMovedEntity(sourceIndex);
 		ret.chunkIndex = chunkIndex;
 		ret.elementIndex = chunk->moveEntityFromOtherChunk(sourceChunk, sourceIndex.elementIndex);
 		return ret;
@@ -73,6 +73,63 @@ namespace ecs
 		}
 
 		return { chunks[chunkIndex].get(), chunkIndex };
+	}
+
+	std::tuple<Chunk*, int> Archetype::getOrCreateChunkForMovedEntity(entityDataIndex currentIndex)
+	{
+		Chunk* currentChunk = ecs->archetypes_[currentIndex.archetypeIndex]->chunks[currentIndex.chunkIndex].get();
+
+		Chunk* newChunk = nullptr;
+		int newChunkIndex = -1;
+		for (int iChunk = 0; iChunk < (int)chunks.size(); iChunk++)
+		{
+			Chunk* destChunk = chunks[iChunk].get();
+
+			bool allSharedComponentsAreEqual = true;
+			for (int iSharedType = 0; iSharedType < (int)destChunk->sharedComponents.size(); iSharedType++)
+			{
+				auto destArray = destChunk->sharedComponents[iSharedType].get();
+				auto srcArray = currentChunk->getSharedComponentArray(destArray->tid);
+				if (!srcArray)
+					continue;
+
+				if (!destArray->isSameAsSharedComponent(srcArray))
+				{
+					allSharedComponentsAreEqual = false;
+					break;
+				}
+			}
+
+			if (!allSharedComponentsAreEqual)
+				continue;
+
+			if (destChunk->entityCapacity > destChunk->size)
+			{
+				newChunk = destChunk;
+				newChunkIndex = iChunk;
+				break;
+			}
+		}
+
+		if (newChunk == nullptr)
+		{
+			auto& newChunkPtr = chunks.emplace_back(
+				std::make_unique<Chunk>(this, containedTypes_.calcTypeIds(ecs->typeIds_), ecs->componentArrayFactory_)
+			);
+
+			// Copy all other shared component from the current chunk to the new one
+			for (int iSharedType = 0; iSharedType < (int)newChunkPtr->sharedComponents.size(); iSharedType++)
+			{
+				auto destArray = newChunkPtr->sharedComponents[iSharedType].get();
+				auto srcArray = currentChunk->getSharedComponentArray(destArray->tid);
+				destArray->copyFromArray(0, srcArray, 0);
+			}
+
+			newChunk = newChunkPtr.get();
+			newChunkIndex = (int)chunks.size() - 1;
+		}
+
+		return { newChunk, newChunkIndex };
 	}
 	
 	void Archetype::save(std::ostream& stream) const
