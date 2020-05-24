@@ -23,13 +23,18 @@ namespace ecs
 	{
 		return nullptr;// chunk.getArray(tid);
 	}
+
+	void Archetype::deleteChunk(int chunkIndex)
+	{
+		chunks[chunkIndex].reset();
+	}
 	
 	entityDataIndex Archetype::createEntity(entityId id)
 	{
 		entityDataIndex ret;
 		ret.archetypeIndex = archetypeIndex;
-		auto [chunk, chunkIndex] = getOrCreateChunkForNewEntity();
-		ret.chunkIndex = chunkIndex;
+		auto chunk = getOrCreateChunkForNewEntity();
+		ret.chunkIndex = currentlyFilledChunkIndex;
 		ret.elementIndex = chunk->createEntity(id);
 		return ret;
 	}
@@ -39,6 +44,10 @@ namespace ecs
 		_ASSERT(index.archetypeIndex == archetypeIndex);
 		Chunk* chunk = chunks[index.chunkIndex].get();
 		entityId movedEntityId = chunk->deleteEntity(index.elementIndex);
+		if (chunk->size == 0)
+		{
+			deleteChunk(index.chunkIndex);
+		}
 		return movedEntityId;
 	}
 	
@@ -60,19 +69,35 @@ namespace ecs
 		return query.check(containedTypes_);
 	}
 
-	std::tuple<Chunk*, int> Archetype::getOrCreateChunkForNewEntity()
+	Chunk* Archetype::getOrCreateChunkForNewEntity()
 	{
-		int chunkIndex = (int)chunks.size() - 1;
-		if (chunkIndex < 0 || 
-			(chunks[chunkIndex]->entityCapacity == chunks[chunkIndex]->size))
+		Chunk* chunkForNewEntity = nullptr;
+		if (currentlyFilledChunkIndex >= 0 && chunks[currentlyFilledChunkIndex])
 		{
-			auto& retPtr = chunks.emplace_back(
-				std::make_unique<Chunk>(this, containedTypes_.calcTypeIds(ecs->typeIds_), ecs->componentArrayFactory_)
-			);
-			return { retPtr.get(), chunkIndex + 1 };
+			chunkForNewEntity = chunks[currentlyFilledChunkIndex].get();
+			if (chunkForNewEntity->size < chunkForNewEntity->entityCapacity)
+				return chunkForNewEntity;
 		}
 
-		return { chunks[chunkIndex].get(), chunkIndex };
+		// The currently used chunk index is not good, let's change it
+		// Let's try to reuse an index
+		for (int iChunk = 0; iChunk < (int)chunks.size(); iChunk++)
+		{
+			if (!chunks[iChunk])
+			{
+				chunks[iChunk] = std::make_unique<Chunk>(this, containedTypes_.calcTypeIds(ecs->typeIds_), ecs->componentArrayFactory_);
+				currentlyFilledChunkIndex = iChunk;
+				return chunks[currentlyFilledChunkIndex].get();
+			}
+		}
+
+		auto& retPtr = chunks.emplace_back(
+			std::make_unique<Chunk>(this, containedTypes_.calcTypeIds(ecs->typeIds_), ecs->componentArrayFactory_)
+		);
+
+		currentlyFilledChunkIndex = (int)chunks.size() - 1;
+		return retPtr.get();
+
 	}
 
 	std::tuple<Chunk*, int> Archetype::getOrCreateChunkForMovedEntity(entityDataIndex currentIndex)
@@ -84,6 +109,8 @@ namespace ecs
 		for (int iChunk = 0; iChunk < (int)chunks.size(); iChunk++)
 		{
 			Chunk* destChunk = chunks[iChunk].get();
+			if (!destChunk)
+				continue;
 
 			bool allSharedComponentsAreEqual = true;
 			for (int iSharedType = 0; iSharedType < (int)destChunk->sharedComponents.size(); iSharedType++)
@@ -113,19 +140,31 @@ namespace ecs
 
 		if (newChunk == nullptr)
 		{
-			auto& newChunkPtr = chunks.emplace_back(
-				std::make_unique<Chunk>(this, containedTypes_.calcTypeIds(ecs->typeIds_), ecs->componentArrayFactory_)
-			);
+			for (int iChunk = 0; iChunk < (int)chunks.size(); iChunk++)
+			{
+				if (!chunks[iChunk])
+				{
+					chunks[iChunk] = std::make_unique<Chunk>(this, containedTypes_.calcTypeIds(ecs->typeIds_), ecs->componentArrayFactory_);
+					newChunk = chunks[iChunk].get();
+				}
+			}
+
+			if (!newChunk)
+			{
+				auto& retPtr = chunks.emplace_back(
+					std::make_unique<Chunk>(this, containedTypes_.calcTypeIds(ecs->typeIds_), ecs->componentArrayFactory_)
+				);
+				newChunk = retPtr.get();
+			}
 
 			// Copy all other shared component from the current chunk to the new one
-			for (int iSharedType = 0; iSharedType < (int)newChunkPtr->sharedComponents.size(); iSharedType++)
+			for (int iSharedType = 0; iSharedType < (int)newChunk->sharedComponents.size(); iSharedType++)
 			{
-				auto destArray = newChunkPtr->sharedComponents[iSharedType].get();
+				auto destArray = newChunk->sharedComponents[iSharedType].get();
 				auto srcArray = currentChunk->getSharedComponentArray(destArray->tid);
 				destArray->copyFromArray(0, srcArray, 0);
 			}
 
-			newChunk = newChunkPtr.get();
 			newChunkIndex = (int)chunks.size() - 1;
 		}
 
@@ -167,14 +206,14 @@ namespace ecs
 	}
 
 	template<class T>
-	entityDataIndex Archetype::setSharedComponent(entityId id, entityDataIndex currentIndex, const T& newSharedComponentValue)
+	std::tuple<entityDataIndex, entityId> Archetype::setSharedComponent(entityId id, entityDataIndex currentIndex, const T& newSharedComponentValue)
 	{
 		Chunk* currentChunk = chunks[currentIndex.chunkIndex].get();
 		typeId sharedComponentType = ecs->getTypeId<T>();
 		const T* originalSharedComponent = currentChunk->getSharedComponent<T>(sharedComponentType);
 		if (equals(*originalSharedComponent, newSharedComponentValue))
 		{	// no need to change anything
-			return currentIndex;
+			return { currentIndex, 0 };
 		}
 
 		// we need to get the chunk this belongs to or create a new one
@@ -183,13 +222,15 @@ namespace ecs
 		for (int iChunk = 0; iChunk < (int)chunks.size(); iChunk++)
 		{
 			Chunk* c = chunks[iChunk].get();
+			if (!c) continue;
+
 			const T* sharedValue = c->getSharedComponent<T>(sharedComponentType);
 			if (equals(*sharedValue, newSharedComponentValue))
 			{
 				// Check all the other shared values
 				bool allSharedComponentsAreEqual = true;
 				for (int iSharedType = 0; iSharedType < (int)currentChunk->sharedComponents.size(); iSharedType++)
-				{	
+				{
 					auto componentToCheck = c->sharedComponents[iSharedType].get();
 					if (componentToCheck->tid == sharedComponentType)
 						continue;
@@ -236,12 +277,18 @@ namespace ecs
 		}
 
 		int newElementIndex = newChunk->moveEntityFromOtherChunk(currentChunk, currentIndex.elementIndex, sharedComponentType);
-		currentChunk->deleteEntity(currentIndex.elementIndex);
-		entityDataIndex ret;
-		ret.archetypeIndex = currentIndex.archetypeIndex;
-		ret.chunkIndex = newChunkIndex;
-		ret.elementIndex = newElementIndex;
+		entityId movedEntityId = currentChunk->deleteEntity(currentIndex.elementIndex);
+		if (currentChunk->size == 0)
+		{
+			_ASSERT_EXPR(movedEntityId == 0, "We moved an entity into a chunk that's empty");
+			deleteChunk(currentIndex.chunkIndex);
+		}
 
-		return ret;
+		entityDataIndex newEntityIndex;
+		newEntityIndex.archetypeIndex = currentIndex.archetypeIndex;
+		newEntityIndex.chunkIndex = newChunkIndex;
+		newEntityIndex.elementIndex = newElementIndex;
+
+		return { newEntityIndex, movedEntityId };
 	}
 }

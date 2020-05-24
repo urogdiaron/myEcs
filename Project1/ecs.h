@@ -40,7 +40,7 @@ namespace ecs
 					{
 						for (auto& chunk : archetype->chunks)
 						{
-							if (chunk->size == 0)
+							if (!chunk || chunk->size == 0)
 								continue;
 
 							auto& queriedChunk = ret.emplace_back();
@@ -64,7 +64,7 @@ namespace ecs
 					{
 						for (auto& chunk : archetype->chunks)
 						{
-							if (chunk->size == 0)
+							if (!chunk || chunk->size == 0)
 								continue;
 
 							auto& queriedChunk = ret.emplace_back();
@@ -145,10 +145,12 @@ namespace ecs
 		template<class T>
 		void setSharedComponent(entityId id, const T& value)
 		{
-			entityDataIndex entityIndex = entityDataIndexMap_[id];
-			Archetype* archetype = archetypes_[entityIndex.archetypeIndex].get();
-			entityIndex = archetype->setSharedComponent(id, entityIndex, value);
-			entityDataIndexMap_[id] = entityIndex;
+			entityDataIndex oldEntityIndex = entityDataIndexMap_[id];
+			Archetype* archetype = archetypes_[oldEntityIndex.archetypeIndex].get();
+			auto [newEntityIndex, movedId] = archetype->setSharedComponent(id, oldEntityIndex, value);
+			entityDataIndexMap_[id] = newEntityIndex;
+			if (movedId)
+				entityDataIndexMap_[movedId] = oldEntityIndex;
 		}
 
 		template<class ...Ts>

@@ -16,19 +16,24 @@ namespace ecs
 		ComponentArrayBase* get_(typeId tid);
 		bool hasAllComponents(const typeQueryList& query) const;
 
-		std::tuple<Chunk*, int> getOrCreateChunkForNewEntity();
+		Chunk* getOrCreateChunkForNewEntity();
 		std::tuple<Chunk*, int> getOrCreateChunkForMovedEntity(entityDataIndex currentIndex);
 
+		// return the new entityDataIndex of the entity and the entityId that moved to its original place
 		template<class T>
-		entityDataIndex setSharedComponent(entityId id, entityDataIndex currentIndex, const T& sharedComponentValue);
+		std::tuple<entityDataIndex, entityId> setSharedComponent(entityId id, entityDataIndex currentIndex, const T& sharedComponentValue);
 
 		void save(std::ostream& stream) const;
 		void load(std::istream& stream, const typeIdList& typeIds, const std::vector<typeId>& allRegisterTypeIds, const ComponentArrayFactory& componentFactory);
 
+	private:
+		void deleteChunk(int chunkIndex);
+
+	public:
 		typeIdList containedTypes_;
-		std::vector<entityId> entityIds_;	// TODO this needs to become a component maybe, but we need efficient queries by this
 		std::vector<std::unique_ptr<Chunk>> chunks; // TODO this needs to be a linked list of chunks most likely
 		Ecs* ecs = nullptr;
 		int archetypeIndex;
+		int currentlyFilledChunkIndex = -1;
 	};
 }
