@@ -27,6 +27,14 @@ namespace ecs
 	void Archetype::deleteChunk(int chunkIndex)
 	{
 		chunks[chunkIndex].reset();
+		int lastValidChunkIndex = (int)chunks.size() - 1;
+		for (lastValidChunkIndex = (int)chunks.size() - 1; lastValidChunkIndex >= 0; lastValidChunkIndex--)
+		{
+			if (chunks[lastValidChunkIndex])
+				break;
+		}
+
+		chunks.erase(chunks.begin() + (lastValidChunkIndex + 1), chunks.end());
 	}
 	
 	entityDataIndex Archetype::createEntity(entityId id)
@@ -72,7 +80,7 @@ namespace ecs
 	Chunk* Archetype::getOrCreateChunkForNewEntity()
 	{
 		Chunk* chunkForNewEntity = nullptr;
-		if (currentlyFilledChunkIndex >= 0 && chunks[currentlyFilledChunkIndex])
+		if (currentlyFilledChunkIndex >= 0 && currentlyFilledChunkIndex < (int)chunks.size() && chunks[currentlyFilledChunkIndex])
 		{
 			chunkForNewEntity = chunks[currentlyFilledChunkIndex].get();
 			if (chunkForNewEntity->size < chunkForNewEntity->entityCapacity)
