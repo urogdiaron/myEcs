@@ -153,6 +153,45 @@ namespace ecs
 		archetypes_.erase(archetypes_.begin() + (lastValidArchetypeIndex + 1), archetypes_.end());
 	}
 	
+	bool Ecs::lockTypeForRead(typeId t)
+	{
+		if (auto it = std::find(lockedForWrite.begin(), lockedForWrite.end(), t); it != lockedForWrite.end())
+			return false;
+
+		lockedForRead.push_back(t);
+		return true;
+	}
+
+	bool Ecs::lockTypeForWrite(typeId t)
+	{
+		if (auto it = std::find(lockedForWrite.begin(), lockedForWrite.end(), t); it != lockedForWrite.end())
+			return false;
+
+		if (auto it = std::find(lockedForRead.begin(), lockedForRead.end(), t); it != lockedForRead.end())
+			return false;
+
+		lockedForWrite.push_back(t);
+		return true;
+	}
+
+	void Ecs::releaseTypeForRead(typeId t)
+	{
+		auto it = std::find(lockedForRead.begin(), lockedForRead.end(), t);
+		if (it != lockedForRead.end())
+			lockedForRead.erase(it);
+		else
+			_ASSERT_EXPR(0, "released type is not locked");
+	}
+
+	void Ecs::releaseTypeForWrite(typeId t)
+	{
+		auto it = std::find(lockedForWrite.begin(), lockedForWrite.end(), t);
+		if (it != lockedForWrite.end())
+			lockedForWrite.erase(it);
+		else
+			_ASSERT_EXPR(0, "released type is not locked");
+	}
+
 	void Ecs::save(std::ostream& stream) const
 	{
 #if 0

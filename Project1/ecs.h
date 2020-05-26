@@ -98,11 +98,19 @@ namespace ecs
 		}
 
 		template<class... Ts>
-		const typeIdList& getTypeIds() const
+		const typeIdList getTypeIds() const
 		{
-			static bool needsSort = true;
-			static typeIdList ret = typeIdList((int)typeDescriptors_.size(), { getTypeId<Ts>()... });
+			typeIdList ret = typeIdList((int)typeDescriptors_.size(), { getTypeId<Ts>()... });
 			return ret;
+		}
+
+		template<class... Ts>
+		const typeIdList getTypeIds_FilterConst(bool keepConst) const
+		{
+			if(keepConst)
+				return typeIdList((int)typeDescriptors_.size(), { getTypeId<Ts>()... }, { std::is_const<Ts>()... });
+			else
+				return typeIdList((int)typeDescriptors_.size(), { getTypeId<Ts>()... }, { !std::is_const<Ts>()... });
 		}
 
 		void deleteArchetype(int archetypeIndex);
@@ -261,6 +269,11 @@ private:
 		}
 
 public:
+	bool lockTypeForRead(typeId t);
+	bool lockTypeForWrite(typeId t);
+	void releaseTypeForRead(typeId t);
+	void releaseTypeForWrite(typeId t);
+
 		template<class... Ts>
 		std::tuple<Ts*...> getComponents(entityId id)
 		{
@@ -286,6 +299,10 @@ public:
 		std::vector<std::unique_ptr<Archetype>> archetypes_;
 		std::vector<std::unique_ptr<struct EntityCommand>> entityCommandBuffer_;
 		std::unordered_map<entityId, entityId> temporaryEntityIdRemapping_;		// for EntityCommand_Create
+		
+		std::vector<typeId> lockedForRead;
+		std::vector<typeId> lockedForWrite;
+
 		entityId nextEntityId = 1;
 	};
 }

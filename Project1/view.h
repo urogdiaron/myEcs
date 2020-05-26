@@ -19,12 +19,27 @@ namespace ecs
 			, autoExecuteCommandBuffer_(autoExecuteCommandBuffer)
 			, typeQueryList((int)ecs.typeDescriptors_.size())
 		{
-			const typeIdList& exposedTypeIds = ecs.getTypeIds<Ts...>();
-			typeQueryList.add(exposedTypeIds, TypeQueryItem::Mode::Write);
+			const typeIdList& readTypeIds = ecs.getTypeIds_FilterConst<Ts...>(true);
+			const typeIdList& writeTypeIds = ecs.getTypeIds_FilterConst<Ts...>(false);
+			typeQueryList.add(readTypeIds, TypeQueryItem::Mode::Read);
+			typeQueryList.add(writeTypeIds, TypeQueryItem::Mode::Write);
 		}
 
 		~View()
 		{
+			if (initialized_)
+			{
+				for (auto t : typeQueryList.read.calcTypeIds(ecs_->typeIds_))
+				{
+					ecs_->releaseTypeForRead(t);
+				}
+
+				for (auto t : typeQueryList.write.calcTypeIds(ecs_->typeIds_))
+				{
+					ecs_->releaseTypeForWrite(t);
+				}
+			}
+
 			if (autoExecuteCommandBuffer_)
 			{
 				executeCommmandBuffer();
@@ -53,6 +68,19 @@ namespace ecs
 		{
 			if (!initialized_)
 			{
+				bool locksAreOk = true;
+				for (auto t : typeQueryList.read.calcTypeIds(ecs_->typeIds_))
+				{
+					locksAreOk = locksAreOk && ecs_->lockTypeForRead(t);
+				}
+
+				for (auto t : typeQueryList.write.calcTypeIds(ecs_->typeIds_))
+				{
+					locksAreOk = locksAreOk && ecs_->lockTypeForWrite(t);
+				}
+
+				_ASSERT_EXPR(locksAreOk, "View unable to lock types");
+
 				queriedChunks_ = ecs_->get<Ts...>(typeQueryList);
 				initialized_ = true;
 			}

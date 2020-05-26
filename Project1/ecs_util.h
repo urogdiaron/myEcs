@@ -106,8 +106,8 @@ namespace ecs
 	{
 		typeIdList(size_t totalTypeCount, std::initializer_list<typeId> tids)
 		{
-			//size_t byteCount = (totalTypeCount + 7) / 8;
-			//bitField.resize(byteCount);
+			size_t byteCount = (totalTypeCount + 7) / 8;
+			bitField.resize(byteCount);
 			for (auto& tid : tids)
 			{
 				size_t byteIndex = tid->index / 8;
@@ -117,6 +117,36 @@ namespace ecs
 
 #ifdef DEBUG_TYPEIDLISTS
 			typeIds = tids;
+			makeVectorUniqueAndSorted(typeIds);
+#endif
+		}
+
+		typeIdList(size_t totalTypeCount, const std::initializer_list<typeId> tids, const std::initializer_list<bool> keep)
+		{
+			size_t byteCount = (totalTypeCount + 7) / 8;
+			bitField.resize(byteCount);
+
+			auto itTid = std::begin(tids);
+			auto itFilter = std::begin(keep);
+			while(itTid != std::end(tids))
+			{
+				bool keep = *itFilter;
+				if (keep)
+				{
+					typeId tid = *itTid;
+					size_t byteIndex = tid->index / 8;
+					size_t bitIndex = tid->index % 8;
+					bitField[byteIndex] |= 1 << bitIndex;
+
+#ifdef DEBUG_TYPEIDLISTS
+					typeIds.push_back(tid);
+#endif
+				}
+				++itTid;
+				++itFilter;
+			}
+
+#ifdef DEBUG_TYPEIDLISTS
 			makeVectorUniqueAndSorted(typeIds);
 #endif
 		}
@@ -261,7 +291,7 @@ namespace ecs
 			return ret;
 		}
 
-		const std::array<uint8_t, 4>& getBitfield() const { return bitField; }
+		const std::vector<uint8_t>& getBitfield() const { return bitField; }
 
 		std::vector<typeId> calcTypeIds(const std::vector<typeId>& allRegisteredTypeIds) const 
 		{
@@ -361,8 +391,7 @@ namespace ecs
 #ifdef DEBUG_TYPEIDLISTS
 		std::vector<typeId> typeIds;
 #endif
-		//std::vector<uint8_t> bitField;
-		std::array<uint8_t, 4> bitField = {};
+		std::vector<uint8_t> bitField;
 	};
 
 	struct TypeQueryItem
@@ -377,6 +406,8 @@ namespace ecs
 		typeQueryList(int totalTypeCount)
 			: required(totalTypeCount, {})
 			, excluded(totalTypeCount, {})
+			, read(totalTypeCount, {})
+			, write(totalTypeCount, {})
 		{
 		}
 
@@ -385,6 +416,10 @@ namespace ecs
 			if (mode != TypeQueryItem::Mode::Exclude)
 			{
 				required.addTypes(tids);
+				if (mode == TypeQueryItem::Mode::Read)
+					read.addTypes(tids);
+				else if (mode == TypeQueryItem::Mode::Write)
+					write.addTypes(tids);
 			}
 			else
 			{
@@ -408,9 +443,11 @@ namespace ecs
 			return true;
 		}
 
-	private:
 		typeIdList required;
 		typeIdList excluded;
+
+		typeIdList read;
+		typeIdList write;
 	};
 
 	template<class... Ts>
