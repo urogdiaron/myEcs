@@ -188,8 +188,8 @@ namespace ecs
 		auto it = std::find(lockedForWrite.begin(), lockedForWrite.end(), t);
 		if (it != lockedForWrite.end())
 			lockedForWrite.erase(it);
-		else
-			_ASSERT_EXPR(0, "released type is not locked");
+		//else
+		//	_ASSERT_EXPR(0, "released type is not locked");
 	}
 
 	void Ecs::save(std::ostream& stream) const

@@ -27,26 +27,13 @@ namespace ecs
 
 		~View()
 		{
-			if (initialized_)
-			{
-				for (auto t : typeQueryList.read.calcTypeIds(ecs_->typeIds_))
-				{
-					ecs_->releaseTypeForRead(t);
-				}
-
-				for (auto t : typeQueryList.write.calcTypeIds(ecs_->typeIds_))
-				{
-					ecs_->releaseTypeForWrite(t);
-				}
-			}
-
 			if (autoExecuteCommandBuffer_)
 			{
 				executeCommmandBuffer();
 			}
 		}
 
-		View(const View&) = delete;
+		View(const View& v) = default;
 		View(View&& v) = default;
 
 		template <class ...Cs>
@@ -63,30 +50,43 @@ namespace ecs
 			return std::move(*this);
 		}
 
-	private:
+		bool lockUsedTypes()
+		{
+			bool locksAreOk = true;
+			for (auto t : typeQueryList.read.calcTypeIds(ecs_->typeIds_))
+			{
+				locksAreOk = locksAreOk && ecs_->lockTypeForRead(t);
+			}
+
+			for (auto t : typeQueryList.write.calcTypeIds(ecs_->typeIds_))
+			{
+				locksAreOk = locksAreOk && ecs_->lockTypeForWrite(t);
+			}
+		}
+
+		void unlockUsedTypes()
+		{
+			for (auto t : typeQueryList.read.calcTypeIds(ecs_->typeIds_))
+			{
+				ecs_->releaseTypeForRead(t);
+			}
+
+			for (auto t : typeQueryList.write.calcTypeIds(ecs_->typeIds_))
+			{
+				ecs_->releaseTypeForWrite(t);
+			}
+		}
+
 		void initializeData()
 		{
 			if (!initialized_)
 			{
-				bool locksAreOk = true;
-				for (auto t : typeQueryList.read.calcTypeIds(ecs_->typeIds_))
-				{
-					locksAreOk = locksAreOk && ecs_->lockTypeForRead(t);
-				}
-
-				for (auto t : typeQueryList.write.calcTypeIds(ecs_->typeIds_))
-				{
-					locksAreOk = locksAreOk && ecs_->lockTypeForWrite(t);
-				}
-
-				_ASSERT_EXPR(locksAreOk, "View unable to lock types");
-
 				queriedChunks_ = ecs_->get<Ts...>(typeQueryList);
 				initialized_ = true;
 			}
 		}
 
-	public:
+		template<bool TOnlyCurrentChunk = false>
 		struct iterator
 		{
 			iterator() = default;
@@ -108,14 +108,21 @@ namespace ecs
 				}
 				else
 				{
-					if ((int)view->queriedChunks_.size() - 1 > chunkIndex)
+					if constexpr (TOnlyCurrentChunk)
 					{
-						chunkIndex++;
-						entityIndex = 0;
+						chunkIndex = -1;
 					}
 					else
 					{
-						chunkIndex = -1;
+						if ((int)view->queriedChunks_.size() - 1 > chunkIndex)
+						{
+							chunkIndex++;
+							entityIndex = 0;
+						}
+						else
+						{
+							chunkIndex = -1;
+						}
 					}
 				}
 				return *this;
@@ -178,13 +185,23 @@ namespace ecs
 			int entityIndex = -1;
 		};
 
-		iterator begin() {
-			return iterator(this);
+		iterator<false> begin() {
+			return iterator<false>(this);
 		}
 
-		iterator end()
+		iterator<false> end()
 		{
-			return iterator();
+			return iterator<false>();
+		}
+
+		iterator<true> beginForChunk(int chunkIndex) {
+			auto it = iterator<true>(this);
+			it.chunkIndex = chunkIndex;
+			return it;
+		}
+
+		iterator<true> endForChunk() {
+			return iterator<true>();
 		}
 
 		template<class ...Ts, class ...Us>
