@@ -30,7 +30,8 @@ namespace ecs
 
 
 			view.initializeData();
-			for (int i = 0; i < (int)view.queriedChunks_.size(); i++)
+			int chunkCount = (int)view.queriedChunks_.size();
+			for (int i = 0; i < chunkCount; i++)
 			{
 				auto result = threadPool.enqueue(
 					//[viewMoved = std::move(view), jobMoved = std::move(job)]()

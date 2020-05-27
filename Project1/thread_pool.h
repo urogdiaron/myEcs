@@ -25,6 +25,7 @@ private:
 template<class F, class... Args>
 decltype(auto) ThreadPool::enqueue(F&& f, Args&&... args)
 {
+    EASY_FUNCTION();
     using return_type = std::invoke_result_t<F, Args...>;
 
     std::packaged_task<return_type()> task(
