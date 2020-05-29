@@ -81,6 +81,7 @@ namespace ecs
 		{
 			if (!initialized_)
 			{
+				EASY_BLOCK("View Init");
 				queriedChunks_ = ecs_->get<Ts...>(typeQueryList);
 				initialized_ = true;
 			}

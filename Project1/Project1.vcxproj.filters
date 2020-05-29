@@ -39,5 +39,11 @@
     <ClInclude Include="ecs_impl.h">
       <Filter>Source Files</Filter>
     </ClInclude>
+    <ClInclude Include="scheduler.h">
+      <Filter>Source Files</Filter>
+    </ClInclude>
+    <ClInclude Include="thread_pool.h">
+      <Filter>Source Files</Filter>
+    </ClInclude>
   </ItemGroup>
 </Project>

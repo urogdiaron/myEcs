@@ -131,6 +131,7 @@
     <ClInclude Include="ecs_util.h" />
     <ClInclude Include="entitycommand.h" />
     <ClInclude Include="scheduler.h" />
+    <ClInclude Include="thread_pool.h" />
     <ClInclude Include="view.h" />
   </ItemGroup>
   <Import Project="$(VCTargetsPath)\Microsoft.Cpp.targets" />
