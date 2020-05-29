@@ -50,6 +50,7 @@ namespace ecs
 							for (int i = 0; i < (int)sizeof...(Ts); i++)
 							{
 								_ASSERT_EXPR(typeIdsToGet[i]->type != ComponentType::Shared, L"Use getSharedComponent on the iterator if you want to read a shared component!");
+								_ASSERT_EXPR(typeIdsToGet[i]->size != 0, L"Attempting to read an empty class component! Use the with function on the View.");
 								queriedChunk.buffers[i + 1] = queriedChunk.chunk->getArray(typeIdsToGet[i])->buffer;
 							}
 						}
@@ -128,7 +129,14 @@ namespace ecs
 
 			auto& typeDesc = typeDescriptors_.emplace_back(std::make_unique<TypeDescriptor>());
 			typeDesc->index = (int)typeDescriptors_.size() - 1;
-			typeDesc->size = sizeof(T);
+			if constexpr (std::is_empty_v<T>)
+			{
+				typeDesc->size = 0;
+			}
+			else
+			{
+				typeDesc->size = sizeof(T);
+			}
 			typeDesc->alignment = alignof(T);
 			typeDesc->type = componentType;
 			typeDesc->name = name;
@@ -140,6 +148,9 @@ namespace ecs
 		void setComponent(entityId id, const T& value)
 		{
 			typeId componentTypeId = getTypeId<T>();
+			if (componentTypeId->size == 0)
+				return;
+
 			if (componentTypeId->type != ComponentType::Shared)
 			{
 				T* comp = getComponent<T>(id);
@@ -213,7 +224,7 @@ namespace ecs
 
 		void changeComponents(entityId id, const typeIdList& typeIds);
 
-		template<class T>
+		template<class... Ts>
 		bool hasComponent(entityId id) const
 		{
 			auto it = entityDataIndexMap_.find(id);
@@ -221,7 +232,7 @@ namespace ecs
 				return false;
 
 			typeQueryList queryList(typeDescriptors_.size());
-			queryList.add(getTypeIds<T>(), TypeQueryItem::Mode::Read);
+			queryList.add(getTypeIds<Ts...>(), TypeQueryItem::Mode::Read);
 			return archetypes_[it->second.archetypeIndex]->hasAllComponents(queryList);
 		}
 
@@ -237,6 +248,7 @@ namespace ecs
 			Chunk* chunk = archetype->chunks[entityIndex.chunkIndex].get();
 			typeId componentTypeId = getTypeId<T>();
 			_ASSERT_EXPR(componentTypeId->type != ComponentType::Shared, L"Use the chunk's getSharedComponent for shared components!");
+			_ASSERT_EXPR(componentTypeId->size != 0, L"Can't use getComponent on empty class components. Use hasComponent instead to check for existence.");
 			ComponentArrayBase* componentArray = chunk->getArray(componentTypeId);
 			if (!componentArray)
 				return nullptr;

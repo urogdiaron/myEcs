@@ -183,6 +183,9 @@ namespace ecs
 
 			for (auto& t : typeIds)
 			{
+				if (t->size == 0)
+					continue;
+
 				// align the offset to this type
 				int under = componentBufferOffset % t->alignment;
 				componentBufferOffset += ((t->alignment - under) % t->alignment);
