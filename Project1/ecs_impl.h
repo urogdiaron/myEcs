@@ -1,5 +1,6 @@
 #pragma once
 #include "ecs.h"
+#include "entitycommand.h"
 
 namespace ecs
 {
@@ -47,7 +48,7 @@ namespace ecs
 		entityId newEntityId = nextEntityId++;
 		auto [archIndex, archetype] = createArchetype(typeIds);
 		entityDataIndex newIndex = archetype->createEntity(newEntityId);
-		entityDataIndexMap_[newEntityId] = newIndex;
+		setEntityIndexMap(newEntityId, newIndex);
 		return newEntityId;
 	}
 
@@ -85,7 +86,7 @@ namespace ecs
 			deleteArchetype(entityIndex.archetypeIndex);
 
 		if (movedEntity)
-			entityDataIndexMap_[movedEntity] = entityIndex;
+			setEntityIndexMap(movedEntity, entityIndex);
 		return true;
 	}
 	
@@ -124,7 +125,7 @@ namespace ecs
 
 		entityDataIndex newElementIndex = archetype->moveFromEntity(id, it->second);
 		deleteEntity(id, false);
-		entityDataIndexMap_[id] = newElementIndex;
+		setEntityIndexMap(id, newElementIndex);
 	}
 	
 	typeId Ecs::getTypeIdByName(const std::string& typeName)
@@ -151,6 +152,18 @@ namespace ecs
 		}
 
 		archetypes_.erase(archetypes_.begin() + (lastValidArchetypeIndex + 1), archetypes_.end());
+	}
+
+	void Ecs::executeCommmandBuffer()
+	{
+		EASY_FUNCTION("executeCommmandBuffer");
+		for (auto& itCommand : entityCommandBuffer_)
+		{
+			itCommand->execute(*this);
+			itCommand.reset();
+		}
+		entityCommandBuffer_.clear();
+		temporaryEntityIdRemapping_.clear();
 	}
 	
 	bool Ecs::lockTypeForRead(typeId t)

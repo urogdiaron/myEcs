@@ -220,13 +220,19 @@ namespace ecs
 		// return value is the entity id that was moved to this position
 		entityId deleteEntity(int elementIndex)
 		{
-			size--;
 			if (size == 0)
 				return 0;
 
+			// We need to do everything even if this is the last item to make sure we run the destructors in the componantArrays.
+			size--;
+
 			entityId* entityIds = getEntityIds();
-			entityId movedEntityId = entityIds[size];
-			entityIds[elementIndex] = movedEntityId;
+			entityId movedEntityId = 0;
+			if (size != elementIndex)
+			{	// If we're not currently deleting the last item, we swap the last one here and return the swapped item to be updated
+				movedEntityId = entityIds[size];
+				entityIds[elementIndex] = movedEntityId;
+			}
 
 			for (auto& componentArray : componentArrays)
 			{

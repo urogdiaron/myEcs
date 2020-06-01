@@ -1,5 +1,7 @@
 #pragma once
 #include "archetype.h"
+#include <atomic>
+#include <mutex>
 
 namespace ecs
 {
@@ -171,7 +173,7 @@ namespace ecs
 			auto [newEntityIndex, movedId] = archetype->setSharedComponent(id, oldEntityIndex, value);
 			entityDataIndexMap_[id] = newEntityIndex;
 			if (movedId)
-				entityDataIndexMap_[movedId] = oldEntityIndex;
+				setEntityIndexMap(movedId, oldEntityIndex);
 		}
 
 		template<class ...Ts>
@@ -225,7 +227,7 @@ namespace ecs
 		void changeComponents(entityId id, const typeIdList& typeIds);
 
 		template<class... Ts>
-		bool hasComponent(entityId id) const
+		bool hasAllComponents(entityId id) const
 		{
 			auto it = entityDataIndexMap_.find(id);
 			if (it == entityDataIndexMap_.end())
@@ -234,6 +236,18 @@ namespace ecs
 			typeQueryList queryList(typeDescriptors_.size());
 			queryList.add(getTypeIds<Ts...>(), TypeQueryItem::Mode::Read);
 			return archetypes_[it->second.archetypeIndex]->hasAllComponents(queryList);
+		}
+
+		template<class... Ts>
+		std::array<bool, sizeof...(Ts)> hasEachComponent(entityId id) const
+		{
+			auto it = entityDataIndexMap_.find(id);
+			if (it == entityDataIndexMap_.end())
+				return {};
+
+			const Archetype* archetype = archetypes_[it->second.archetypeIndex].get();
+			std::array<bool, sizeof...(Ts)> ret = { archetype->containedTypes_.hasType(getTypeId<Ts>())... };
+			return ret;
 		}
 
 		template<class T>
@@ -258,27 +272,76 @@ namespace ecs
 
 		typeId getTypeIdByName(const std::string& typeName);
 
+		void executeCommmandBuffer();
+
 private:
-	private:
-		template<class T>
-		void getComponents_impl(Chunk* chunk, int elementIndex, T*& out)
-		{
-			auto componentArray = chunk->getArray(getTypeId<T>());
-			if (!componentArray)
-			{
-				out = nullptr;
-				return;
-			}
+	entityId getTempEntityId()
+	{
+		entityId ret = nextTempEntityId.fetch_add(1);
+		return ret;
+	}
 
-			out = static_cast<ComponentArray<T>*>(componentArray)->getElement(elementIndex);
+	void addToCommandBuffer(std::unique_ptr<struct EntityCommand>&& command)
+	{
+		commandBufferMutex.lock();
+		entityCommandBuffer_.emplace_back(std::move(command));
+		commandBufferMutex.unlock();
+	}
+
+	template<class T>
+	void getComponents_impl(Chunk* chunk, int elementIndex, T*& out)
+	{
+		typeId componentTypeId = getTypeId<T>();
+		_ASSERT_EXPR(componentTypeId->size != 0, L"Can't use getComponent on empty class components. Use hasComponent instead to check for existence.");
+
+		auto componentArray = chunk->getArray(componentTypeId);
+		if (!componentArray)
+		{
+			out = nullptr;
+			return;
 		}
 
-		template<class T, class... Ts>
-		void getComponents_impl(Chunk* chunk, int elementIndex, T*& out, Ts*&... restOut)
+		out = static_cast<ComponentArray<T>*>(componentArray)->getElement(elementIndex);
+	}
+
+	template<class T, class... Ts>
+	void getComponents_impl(Chunk* chunk, int elementIndex, T*& out, Ts*&... restOut)
+	{
+		getComponents_impl(chunk, elementIndex, out);
+		getComponents_impl(chunk, elementIndex, restOut...);
+	}
+
+	bool setEntityIndexMap(entityId id, entityDataIndex index)
+	{
+		if (!id)
 		{
-			getComponents_impl(chunk, elementIndex, out);
-			getComponents_impl(chunk, elementIndex, restOut...);
+			printf("setEntityIndexMap (%d) invalid id to index: %d, %d, %d", id, index.archetypeIndex, index.chunkIndex, index.elementIndex);
+			return false;
 		}
+
+		if (index.archetypeIndex < 0 || index.archetypeIndex >= archetypes_.size() || !archetypes_[index.archetypeIndex])
+		{
+			printf("setEntityIndexMap (%d) invalid archetypeIndex: %d, %d, %d", id, index.archetypeIndex, index.chunkIndex, index.elementIndex);
+			return false;
+		}
+
+		auto arch = archetypes_[index.archetypeIndex].get();
+		if (index.chunkIndex < 0 || index.chunkIndex >= arch->chunks.size() || !arch->chunks[index.chunkIndex])
+		{
+			printf("setEntityIndexMap (%d) invalid chunkIndex: %d, %d, %d", id, index.archetypeIndex, index.chunkIndex, index.elementIndex);
+			return false;
+		}
+
+		auto chunk = arch->chunks[index.chunkIndex].get();
+		if (index.elementIndex < 0 || index.elementIndex >= chunk->size)
+		{
+			printf("setEntityIndexMap (%d) invalid elementIndex: %d, %d, %d", id, index.archetypeIndex, index.chunkIndex, index.elementIndex);
+			return false;
+		}
+
+		entityDataIndexMap_[id] = index;
+		return true;
+	}
 
 public:
 	bool lockTypeForRead(typeId t);
@@ -312,9 +375,12 @@ public:
 		std::vector<std::unique_ptr<struct EntityCommand>> entityCommandBuffer_;
 		std::unordered_map<entityId, entityId> temporaryEntityIdRemapping_;		// for EntityCommand_Create
 		
+		std::mutex commandBufferMutex;
+
 		std::vector<typeId> lockedForRead;
 		std::vector<typeId> lockedForWrite;
 
 		entityId nextEntityId = 1;
+		std::atomic<entityId> nextTempEntityId = 1;
 	};
 }

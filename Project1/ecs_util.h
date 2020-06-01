@@ -238,7 +238,7 @@ namespace ecs
 			return true;
 		}
 
-		bool hasType(const typeId& type)
+		bool hasType(const typeId& type) const
 		{
 			return getBit(type->index);
 		}

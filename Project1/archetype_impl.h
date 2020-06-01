@@ -18,11 +18,6 @@ namespace ecs
 		, ecs(ecs)
 	{
 	}
-	
-	ComponentArrayBase* Archetype::get_(typeId tid)
-	{
-		return nullptr;// chunk.getArray(tid);
-	}
 
 	void Archetype::deleteChunk(int chunkIndex)
 	{

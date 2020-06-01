@@ -14,9 +14,8 @@ namespace ecs
 	{
 		friend struct iterator;
 
-		View(Ecs& ecs, bool autoExecuteCommandBuffer = true)
+		View(Ecs& ecs)
 			: ecs_(&ecs)
-			, autoExecuteCommandBuffer_(autoExecuteCommandBuffer)
 			, typeQueryList((int)ecs.typeDescriptors_.size())
 		{
 			const typeIdList& readTypeIds = ecs.getTypeIds_FilterConst<Ts...>(true);
@@ -27,10 +26,6 @@ namespace ecs
 
 		~View()
 		{
-			if (autoExecuteCommandBuffer_)
-			{
-				executeCommmandBuffer();
-			}
 		}
 
 		View(const View& v) = default;
@@ -147,12 +142,6 @@ namespace ecs
 				return chunkIndex >= 0 && entityIndex >= 0;
 			}
 
-			entityId getId() const
-			{
-				auto& vectors = std::get<std::vector<std::vector<entityId>*>>(*view->data_);
-				elementOut = (*vectors[chunkIndex])[entityIndex];
-			}
-
 			template<class ...Ts>
 			bool hasComponents() const
 			{
@@ -208,60 +197,46 @@ namespace ecs
 		template<class ...Ts, class ...Us>
 		entityId createEntity(const Prefab<Ts...>& prefab, const Us&... initialValues)
 		{
-			entityId newId = -((int)ecs_->entityCommandBuffer_.size() + 1);
-			ecs_->entityCommandBuffer_.push_back(std::make_unique<EntityCommand_CreateFromPrefab<Prefab<Ts...>, Us...>>(newId, &prefab, initialValues...));
+			entityId newId = -ecs_->getTempEntityId();
+			ecs_->addToCommandBuffer(std::make_unique<EntityCommand_CreateFromPrefab<Prefab<Ts...>, Us...>>(newId, &prefab, initialValues...));
 			return newId;
 		}
 
 		template<class ...Ts>
 		entityId createEntity(const Ts... initialValues)
 		{
-			entityId newId = -((int)ecs_->entityCommandBuffer_.size() + 1);
-			ecs_->entityCommandBuffer_.push_back(std::make_unique<EntityCommand_Create<Ts...>>(newId, initialValues...));
+			entityId newId = -ecs_->getTempEntityId();
+			ecs_->addToCommandBuffer(std::make_unique<EntityCommand_Create<Ts...>>(newId, initialValues...));
 			return newId;
 		}
 
 		void deleteEntity(entityId id)
 		{
-			ecs_->entityCommandBuffer_.push_back(std::make_unique<EntityCommand_Delete>(id));
+			ecs_->addToCommandBuffer(std::make_unique<EntityCommand_Delete>(id));
 		}
 
 		template<class... Ts>
 		void deleteComponents(entityId id)
 		{
-			ecs_->entityCommandBuffer_.push_back(std::make_unique<EntityCommand_DeleteComponents>(id, ecs_->getTypeIds<Ts...>()));
+			ecs_->addToCommandBuffer(std::make_unique<EntityCommand_DeleteComponents>(id, ecs_->getTypeIds<Ts...>()));
 		}
 
 		template<class T>
 		void addComponent(entityId id, const T& data = T{})
 		{
-			ecs_->entityCommandBuffer_.push_back(std::make_unique<EntityCommand_AddComponent<T>>(id, data));
+			ecs_->addToCommandBuffer(std::make_unique<EntityCommand_AddComponent<T>>(id, data));
 		}
 
 		template<class... Ts>
 		void changeComponents(entityId id)
 		{
-			ecs_->entityCommandBuffer_.push_back(std::make_unique<EntityCommand_ChangeComponents>(id, ecs_->getTypeIds<Ts...>()));
+			ecs_->addToCommandBuffer(std::make_unique<EntityCommand_ChangeComponents>(id, ecs_->getTypeIds<Ts...>()));
 		}
 
 		template<class T>
 		void setComponentData(entityId id, const T& data)
 		{
-			ecs_->entityCommandBuffer_.push_back(std::make_unique<EntityCommand_SetComponent<T>>(id, data));
-		}
-
-		void executeCommmandBuffer()
-		{
-			if (ecs_->entityCommandBuffer_.size() == 0)
-				return;
-
-			for (auto& itCommand : ecs_->entityCommandBuffer_)
-			{
-				itCommand->execute(*ecs_);
-			}
-
-			ecs_->entityCommandBuffer_.clear();
-			ecs_->temporaryEntityIdRemapping_.clear();
+			ecs_->addToCommandBuffer(std::make_unique<EntityCommand_SetComponent<T>>(id, data));
 		}
 
 		size_t getCount()
@@ -281,13 +256,5 @@ namespace ecs
 		std::vector<Archetype*>* archetypes_ = nullptr;
 		std::vector<Ecs::QueriedChunk<sizeof...(Ts)>> queriedChunks_;
 		bool initialized_ = false;
-		bool autoExecuteCommandBuffer_ = true;
-	};
-
-	template<class ...Ts>
-	struct ViewBuilder
-	{
-		Ecs* ecs;
-		
 	};
 }
