@@ -96,6 +96,8 @@ namespace ecs
 				}
 			}
 
+			View* getView() const { return view; }
+
 			iterator& operator++()
 			{
 				if (view->queriedChunks_[chunkIndex].entityCount - 1 > entityIndex)

@@ -22,14 +22,9 @@ namespace ecs
 	void Archetype::deleteChunk(int chunkIndex)
 	{
 		chunks[chunkIndex].reset();
-		int lastValidChunkIndex = (int)chunks.size() - 1;
-		for (lastValidChunkIndex = (int)chunks.size() - 1; lastValidChunkIndex >= 0; lastValidChunkIndex--)
-		{
-			if (chunks[lastValidChunkIndex])
-				break;
-		}
 
-		chunks.erase(chunks.begin() + (lastValidChunkIndex + 1), chunks.end());
+		while (chunks.size() && !chunks.back())
+			chunks.pop_back();
 	}
 	
 	entityDataIndex Archetype::createEntity(entityId id)
@@ -49,6 +44,8 @@ namespace ecs
 		entityId movedEntityId = chunk->deleteEntity(index.elementIndex);
 		if (chunk->size == 0)
 		{
+			if (movedEntityId) 
+				printf("Deleting a chunk when we move an entity into it\n");
 			deleteChunk(index.chunkIndex);
 		}
 		return movedEntityId;
@@ -149,6 +146,7 @@ namespace ecs
 				{
 					chunks[iChunk] = std::make_unique<Chunk>(this, containedTypes_.calcTypeIds(ecs->typeIds_), ecs->componentArrayFactory_);
 					newChunk = chunks[iChunk].get();
+					newChunkIndex = iChunk;
 				}
 			}
 
@@ -158,6 +156,7 @@ namespace ecs
 					std::make_unique<Chunk>(this, containedTypes_.calcTypeIds(ecs->typeIds_), ecs->componentArrayFactory_)
 				);
 				newChunk = retPtr.get();
+				newChunkIndex = (int)chunks.size() - 1;
 			}
 
 			// Copy all other shared component from the current chunk to the new one
@@ -167,8 +166,6 @@ namespace ecs
 				auto srcArray = currentChunk->getSharedComponentArray(destArray->tid);
 				destArray->copyFromArray(0, srcArray, 0);
 			}
-
-			newChunkIndex = (int)chunks.size() - 1;
 		}
 
 		return { newChunk, newChunkIndex };

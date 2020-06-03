@@ -315,27 +315,34 @@ private:
 	{
 		if (!id)
 		{
-			printf("setEntityIndexMap (%d) invalid id to index: %d, %d, %d", id, index.archetypeIndex, index.chunkIndex, index.elementIndex);
+			printf("setEntityIndexMap (%d) invalid id to index: %d, %d, %d\n", id, index.archetypeIndex, index.chunkIndex, index.elementIndex);
 			return false;
 		}
 
 		if (index.archetypeIndex < 0 || index.archetypeIndex >= archetypes_.size() || !archetypes_[index.archetypeIndex])
 		{
-			printf("setEntityIndexMap (%d) invalid archetypeIndex: %d, %d, %d", id, index.archetypeIndex, index.chunkIndex, index.elementIndex);
+			printf("setEntityIndexMap (%d) invalid archetypeIndex: %d, %d, %d\n", id, index.archetypeIndex, index.chunkIndex, index.elementIndex);
 			return false;
 		}
 
 		auto arch = archetypes_[index.archetypeIndex].get();
 		if (index.chunkIndex < 0 || index.chunkIndex >= arch->chunks.size() || !arch->chunks[index.chunkIndex])
 		{
-			printf("setEntityIndexMap (%d) invalid chunkIndex: %d, %d, %d", id, index.archetypeIndex, index.chunkIndex, index.elementIndex);
+			printf("setEntityIndexMap (%d) invalid chunkIndex: %d, %d, %d\n", id, index.archetypeIndex, index.chunkIndex, index.elementIndex);
 			return false;
 		}
 
 		auto chunk = arch->chunks[index.chunkIndex].get();
 		if (index.elementIndex < 0 || index.elementIndex >= chunk->size)
 		{
-			printf("setEntityIndexMap (%d) invalid elementIndex: %d, %d, %d", id, index.archetypeIndex, index.chunkIndex, index.elementIndex);
+			printf("setEntityIndexMap (%d) invalid elementIndex: %d, %d, %d\n", id, index.archetypeIndex, index.chunkIndex, index.elementIndex);
+			return false;
+		}
+
+		entityId actualId = reinterpret_cast<entityId*>(&chunk->buffer[0])[index.elementIndex];
+		if (actualId != id)
+		{
+			printf("setEntityIndexMap (%d) actual id at the place is %d: %d, %d, %d\n", id, actualId, index.archetypeIndex, index.chunkIndex, index.elementIndex);
 			return false;
 		}
 

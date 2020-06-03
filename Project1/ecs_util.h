@@ -91,9 +91,9 @@ namespace ecs
 
 	using typeId = TypeDescriptor*;
 
-#ifdef _DEBUG
+//#ifdef _DEBUG
 #define DEBUG_TYPEIDLISTS
-#endif
+//#endif
 
 	struct entityDataIndex
 	{

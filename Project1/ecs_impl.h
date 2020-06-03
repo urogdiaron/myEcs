@@ -60,6 +60,9 @@ namespace ecs
 			return false;
 
 		entityDataIndex entityIndex = it->second;
+		if (entityIndex.archetypeIndex < 0)
+			return false;
+
 		Archetype* arch = archetypes_[entityIndex.archetypeIndex].get();
 
 		if (keepStateComponents)
@@ -80,7 +83,12 @@ namespace ecs
 
 		// Delete the entity and clean up the map indices
 		entityId movedEntity = arch->deleteEntity(entityIndex);
-		entityDataIndexMap_.erase(it);
+
+		entityDataIndex deletedIndex = entityIndex;
+		deletedIndex.archetypeIndex = -(entityIndex.archetypeIndex + 1);
+		if (keepStateComponents)
+			deletedIndex.chunkIndex = -(entityIndex.chunkIndex + 1);
+		entityDataIndexMap_[id] = deletedIndex;
 
 		if (arch->chunks.size() == 0)
 			deleteArchetype(entityIndex.archetypeIndex);
@@ -144,14 +152,9 @@ namespace ecs
 	void Ecs::deleteArchetype(int archetypeIndex)
 	{
 		archetypes_[archetypeIndex].reset();
-		int lastValidArchetypeIndex = (int)archetypes_.size() - 1;
-		for (lastValidArchetypeIndex = (int)archetypes_.size() - 1; lastValidArchetypeIndex >= 0; lastValidArchetypeIndex--)
-		{
-			if (archetypes_[lastValidArchetypeIndex])
-				break;
-		}
 
-		archetypes_.erase(archetypes_.begin() + (lastValidArchetypeIndex + 1), archetypes_.end());
+		while (archetypes_.size() && !archetypes_.back())
+			archetypes_.pop_back();
 	}
 
 	void Ecs::executeCommmandBuffer()
@@ -160,7 +163,7 @@ namespace ecs
 		for (auto& itCommand : entityCommandBuffer_)
 		{
 			itCommand->execute(*this);
-			itCommand.reset();
+			//itCommand.reset();
 		}
 		entityCommandBuffer_.clear();
 		temporaryEntityIdRemapping_.clear();

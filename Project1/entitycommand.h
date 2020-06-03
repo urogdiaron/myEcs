@@ -56,12 +56,13 @@ namespace ecs
 
 		void execute(struct Ecs& ecs) override 
 		{
-			if (id < 0)
+			entityId idToDelete = id;
+			if (idToDelete < 0)
 			{
-				id = ecs.temporaryEntityIdRemapping_[id];
+				idToDelete = ecs.temporaryEntityIdRemapping_[id];
 			}
 
-			ecs.deleteEntity(id, true);
+			ecs.deleteEntity(idToDelete, true);
 		}
 
 		entityId id;
@@ -77,14 +78,15 @@ namespace ecs
 
 		void execute(struct Ecs& ecs) override
 		{
-			if (id < 0)
-				id = ecs.temporaryEntityIdRemapping_[id];
+			entityId idToUse = id;
+			if (idToUse < 0)
+				idToUse = ecs.temporaryEntityIdRemapping_[id];
 
-			auto comp = ecs.getComponent<T>(id);
+			auto comp = ecs.getComponent<T>(idToUse);
 			if (comp)
 				*comp = data;
 			else
-				printf("EntityCommand_SetComponent: Component data not found. Id: %d; Type: %s.", id, ecs.getTypeId<T>()->name.c_str());
+				printf("EntityCommand_SetComponent: Component data not found. Id: %d; Type: %s.", idToUse, ecs.getTypeId<T>()->name.c_str());
 		}
 
 		entityId id;
@@ -100,10 +102,11 @@ namespace ecs
 
 		void execute(struct Ecs& ecs) override
 		{
-			if (id < 0)
-				id = ecs.temporaryEntityIdRemapping_[id];
+			entityId idToUse = id;
+			if (idToUse < 0)
+				idToUse = ecs.temporaryEntityIdRemapping_[id];
 
-			ecs.deleteComponents(id, types);
+			ecs.deleteComponents(idToUse, types);
 		}
 
 		entityId id;
@@ -120,10 +123,11 @@ namespace ecs
 
 		void execute(struct Ecs& ecs) override
 		{
-			if (id < 0)
-				id = ecs.temporaryEntityIdRemapping_[id];
+			entityId idToUse = id;
+			if (idToUse < 0)
+				idToUse = ecs.temporaryEntityIdRemapping_[id];
 
-			ecs.addComponent(id, data);
+			ecs.addComponent(idToUse, data);
 		}
 
 		entityId id;
@@ -139,10 +143,11 @@ namespace ecs
 
 		void execute(struct Ecs& ecs) override
 		{
-			if (id < 0)
-				id = ecs.temporaryEntityIdRemapping_[id];
+			entityId idToUse = id;
+			if (idToUse < 0)
+				idToUse = ecs.temporaryEntityIdRemapping_[id];
 
-			ecs.changeComponents(id, types);
+			ecs.changeComponents(idToUse, types);
 		}
 
 		entityId id;
