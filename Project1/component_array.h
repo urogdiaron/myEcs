@@ -45,6 +45,12 @@ namespace ecs
 			auto sourceArrayCasted = static_cast<const ComponentArray<T>*>(sourceArray);
 			auto tSourceBuffer = reinterpret_cast<T*>(sourceArrayCasted->buffer);
 			auto tDestBuffer = reinterpret_cast<T*>(buffer);
+
+			if constexpr (!std::is_trivially_move_assignable_v<T>)
+			{
+				new (&buffer[destElementIndex * elementSize]) T{};
+			}
+
 			tDestBuffer[destElementIndex] = std::move(tSourceBuffer[sourceElementIndex]);
 		}
 
@@ -143,15 +149,12 @@ namespace ecs
 	{
 		Chunk()
 		{
-			buffer = {};
 			entityCapacity = 0;
 		}
 
 		Chunk(struct Archetype* archetype, const std::vector<typeId>& typeIds, const ComponentArrayFactory& componentArrayFactory)
 			: archetype(archetype)
 		{
-			buffer = {};
-
 			int maxAlign = (int)alignof(std::max_align_t);
 			int worstCaseCapacity = bufferCapacity - maxAlign * (int)typeIds.size();
 
