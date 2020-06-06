@@ -100,6 +100,7 @@ namespace ecs
 			return getTypeId_impl<std::decay_t<T>>();
 		}
 
+	public:
 		template<class... Ts>
 		const typeIdList getTypeIds() const
 		{
@@ -114,6 +115,12 @@ namespace ecs
 				return typeIdList((int)typeDescriptors_.size(), { getTypeId<Ts>()... }, { std::is_const<Ts>()... });
 			else
 				return typeIdList((int)typeDescriptors_.size(), { getTypeId<Ts>()... }, { !std::is_const<Ts>()... });
+		}
+
+		template<class... Ts>
+		View<Ts...> view()
+		{
+			return View<Ts...>(*this);
 		}
 
 		void deleteArchetype(int archetypeIndex);

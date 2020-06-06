@@ -93,6 +93,8 @@ namespace ecs
 				{
 					chunkIndex = 0;
 					entityIndex = 0;
+
+					//createCurrentTuple(std::index_sequence_for<Ts...>());
 				}
 			}
 
@@ -123,6 +125,11 @@ namespace ecs
 						}
 					}
 				}
+
+				//if (isValid())
+				//{
+				//	createCurrentTuple(std::index_sequence_for<Ts...>());
+				//}
 				return *this;
 			}
 
@@ -156,23 +163,27 @@ namespace ecs
 				return view->queriedChunks_[chunkIndex].chunk->getSharedComponent<TSharedComp>(view->ecs_->getTypeId<TSharedComp>());
 			}
 
-			std::tuple<const iterator&, const entityId&, Ts &...> operator*()
+			std::tuple<const entityId&, Ts&...> operator*() const
 			{
-				auto a = std::index_sequence_for<Ts...>();
-				return getCurrentTuple(a);
+				return createCurrentTuple(std::index_sequence_for<Ts...>());
+				//return *reinterpret_cast<const std::tuple<const entityId&, Ts&...>*>(&currentTupleBuffer[0]);
 			}
 
+			template<class T>
+			T& get() const { return std::get<T>(*this); }
+
 			template<size_t... Is>
-			std::tuple<const iterator&, const entityId&, Ts&...> getCurrentTuple(std::index_sequence<Is...>)
+			std::tuple<const entityId&, Ts&...> createCurrentTuple(std::index_sequence<Is...>) const
 			{
-				return {
-					*this,
+				return
+				{
 					reinterpret_cast<const entityId*>(view->queriedChunks_[chunkIndex].buffers[0])[entityIndex],
 					reinterpret_cast<Ts*>(view->queriedChunks_[chunkIndex].buffers[Is + 1])[entityIndex]...
 				};
 			}
 
 			View* view = nullptr;
+			//std::array<uint8_t, sizeof(std::tuple<const entityId&, Ts&...>)> currentTupleBuffer = {};
 			int chunkIndex = -1;
 			int entityIndex = -1;
 		};
@@ -255,7 +266,6 @@ namespace ecs
 
 		Ecs* ecs_;
 		typeQueryList typeQueryList;
-		std::vector<Archetype*>* archetypes_ = nullptr;
 		std::vector<Ecs::QueriedChunk<sizeof...(Ts)>> queriedChunks_;
 		bool initialized_ = false;
 	};

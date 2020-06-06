@@ -84,11 +84,13 @@ namespace ecs
 		// Delete the entity and clean up the map indices
 		entityId movedEntity = arch->deleteEntity(entityIndex);
 
-		entityDataIndex deletedIndex = entityIndex;
-		deletedIndex.archetypeIndex = -(entityIndex.archetypeIndex + 1);
-		if (keepStateComponents)
-			deletedIndex.chunkIndex = -(entityIndex.chunkIndex + 1);
-		entityDataIndexMap_[id] = deletedIndex;
+		//entityDataIndex deletedIndex = entityIndex;
+		//deletedIndex.archetypeIndex = -(entityIndex.archetypeIndex + 1);
+		//if (keepStateComponents)
+		//	deletedIndex.chunkIndex = -(entityIndex.chunkIndex + 1);
+		//entityDataIndexMap_[id] = deletedIndex;
+
+		entityDataIndexMap_.erase(id);
 
 		if (arch->chunks.size() == 0)
 			deleteArchetype(entityIndex.archetypeIndex);

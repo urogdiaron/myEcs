@@ -427,6 +427,7 @@ namespace ecs
 			}
 		}
 
+	public:
 		bool check(const typeIdList& listToCheck) const
 		{
 			for (size_t i = 0; i < listToCheck.getBitfield().size(); i++)
