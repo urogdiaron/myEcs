@@ -93,6 +93,27 @@ namespace ecs
 		T data;
 	};
 
+	template<class T>
+	struct EntityCommand_SetSharedComponent : EntityCommand
+	{
+		EntityCommand_SetSharedComponent(entityId id, const T& data)
+			: id(id)
+			, data(data)
+		{}
+
+		void execute(struct Ecs& ecs) override
+		{
+			entityId idToUse = id;
+			if (idToUse < 0)
+				idToUse = ecs.temporaryEntityIdRemapping_[id];
+
+			ecs.setSharedComponent(idToUse, data);
+		}
+
+		entityId id;
+		T data;
+	};
+
 	struct EntityCommand_DeleteComponents : EntityCommand
 	{
 		EntityCommand_DeleteComponents(entityId id, const typeIdList& types)

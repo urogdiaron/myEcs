@@ -14,10 +14,17 @@ namespace ecs
 	private:
 		template<typename...>
 		friend struct View;
+
 		friend struct Archetype;
 		
 		template<typename...>
 		friend struct EntityCommand_Create;
+
+		template<typename>
+		friend struct EntityCommand_SetComponent;
+
+		template<typename>
+		friend struct EntityCommand_SetSharedComponent;
 
 		template<size_t ComponentCount>
 		struct QueriedChunk
@@ -308,7 +315,7 @@ private:
 			return;
 		}
 
-		out = static_cast<ComponentArray<T>*>(componentArray)->getElement(elementIndex);
+		out = static_cast<ComponentArray<std::decay_t<T>>*>(componentArray)->getElement(elementIndex);
 	}
 
 	template<class T, class... Ts>

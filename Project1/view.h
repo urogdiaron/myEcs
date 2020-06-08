@@ -13,7 +13,9 @@ namespace ecs
 	struct View
 	{
 		friend struct iterator;
+		friend struct Ecs;
 
+	private:
 		View(Ecs& ecs)
 			: ecs_(&ecs)
 			, typeQueryList((int)ecs.typeDescriptors_.size())
@@ -24,6 +26,7 @@ namespace ecs
 			typeQueryList.add(writeTypeIds, TypeQueryItem::Mode::Write);
 		}
 
+	public:
 		~View()
 		{
 		}
@@ -42,6 +45,22 @@ namespace ecs
 		View exclude()
 		{
 			typeQueryList.add(ecs_->getTypeIds<Cs...>(), TypeQueryItem::Mode::Exclude);
+			return std::move(*this);
+		}
+
+		template <class C>
+		View filterShared(const C& sharedComponent)
+		{
+			initializeData();
+			for (auto it = queriedChunks_.begin(); it != queriedChunks_.end();)
+			{
+				Chunk* chunk = it->chunk;
+				const C* sharedValue = chunk->getSharedComponent<C>(ecs_->getTypeId<C>());
+				if (!sharedValue || !equals(*sharedValue, sharedComponent))
+					it = queriedChunks_.erase(it);
+				else
+					++it;
+			}
 			return std::move(*this);
 		}
 
@@ -250,6 +269,12 @@ namespace ecs
 		void setComponentData(entityId id, const T& data)
 		{
 			ecs_->addToCommandBuffer(std::make_unique<EntityCommand_SetComponent<T>>(id, data));
+		}
+
+		template<class T>
+		void setSharedComponentData(entityId id, const T& data)
+		{
+			ecs_->addToCommandBuffer(std::make_unique<EntityCommand_SetSharedComponent<T>>(id, data));
 		}
 
 		size_t getCount()
