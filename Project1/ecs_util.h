@@ -278,7 +278,7 @@ namespace ecs
 				if (hasType)
 				{
 					auto componentType = allRegisteredTypeIds[i]->type;
-					if (componentType == ComponentType::DontSave || componentType == ComponentType::State)
+					if (componentType == ComponentType::DontSave || componentType == ComponentType::State || componentType == ComponentType::Internal)
 						continue;
 					ret.bitField[byteIndex] |= 1 << bitIndex;
 				}

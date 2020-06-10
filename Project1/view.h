@@ -201,6 +201,17 @@ namespace ecs
 				};
 			}
 
+			template<class T>
+			T* getComponent() const
+			{
+				Chunk* chunk = view->queriedChunks_[chunkIndex].chunk;
+				auto tid = view->ecs_->getTypeId<T>();
+				auto componentArray = static_cast<ComponentArray<std::decay_t<T>>*>(chunk->getArray(tid));
+				if (!componentArray)
+					return nullptr;
+				return componentArray->getElement(entityIndex);
+			}
+
 			View* view = nullptr;
 			//std::array<uint8_t, sizeof(std::tuple<const entityId&, Ts&...>)> currentTupleBuffer = {};
 			int chunkIndex = -1;

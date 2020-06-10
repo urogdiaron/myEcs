@@ -173,36 +173,26 @@ namespace ecs
 	
 	void Archetype::save(std::ostream& stream) const
 	{
-		//containedTypes_.save(stream);
-		//size_t count = 0;
-		//count = entityIds_.size();
-		//stream.write((const char*)&count, sizeof(count));
-		//stream.write((const char*)entityIds_.data(), entityIds_.size() * sizeof(entityId));
-		//
-		//count = componentArrays_.size();
-		//stream.write((const char*)&count, sizeof(count));
-		//for (auto& it : componentArrays_)
-		//{
-		//	stream.write((const char*)&it.first->index, sizeof(typeIndex));
-		//	it.second->save(stream);
-		//}
+		size_t chunkCount = chunks.size();
+		stream.write((char*)&chunkCount, sizeof(chunkCount));
+		for (int iChunk = 0; iChunk < chunkCount; iChunk++)
+		{
+			chunks[iChunk]->save(stream);
+		}
 	}
 	
-	void Archetype::load(std::istream& stream, const typeIdList& typeIds, const std::vector<typeId>& allRegisterTypeIds, const ComponentArrayFactory& componentFactory)
+	void Archetype::load(std::istream& stream, const std::vector<typeId>& typeIdsByLoadedIndex)
 	{
-		//containedTypes_ = typeIds;
-		//size_t entityCount = 0;
-		//stream.read((char*)&entityCount, sizeof(entityCount));
-		//entityIds_.resize(entityCount);
-		//stream.read((char*)entityIds_.data(), entityCount * sizeof(entityId));
-		//
-		//auto typesSortedByIndex = containedTypes_.calcTypeIds(allRegisterTypeIds);
-		//for (auto& t : typesSortedByIndex)
-		//{
-		//	auto componentArray = componentFactory.create(t);
-		//	componentArray->load(stream, entityCount);
-		//	componentArrays_[t] = std::move(componentArray);
-		//}
+		size_t chunkCount = 0;
+		stream.read((char*)&chunkCount, sizeof(chunkCount));
+		for (int iChunk = 0; iChunk < chunkCount; iChunk++)
+		{
+			auto chunk = chunks.emplace_back(
+				std::make_unique<Chunk>(this, containedTypes_.calcTypeIds(ecs->typeIds_), ecs->componentArrayFactory_)
+			).get();
+
+			chunk->load(stream, typeIdsByLoadedIndex);
+		}
 	}
 
 	template<class T>

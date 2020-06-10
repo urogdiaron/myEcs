@@ -212,7 +212,6 @@ namespace ecs
 
 	void Ecs::save(std::ostream& stream) const
 	{
-#if 0
 		size_t count = typeDescriptors_.size();
 		stream.write((char*)&count, sizeof(size_t));
 		for (auto& t : typeDescriptors_)
@@ -229,10 +228,13 @@ namespace ecs
 		int archetypeIndex = 0;
 		std::vector<uint8_t> skipArchetype(archetypes_.size());
 		typeId dontSaveEntityType = getTypeId<DontSaveEntity>();
+		typeId deletedEntity = getTypeId<DeletedEntity>();
 
 		for (size_t iArch = 0; iArch < archetypes_.size(); iArch++)
 		{
-			if (archetypes_[iArch]->containedTypes_.hasType(dontSaveEntityType))
+			if (!archetypes_[iArch] || archetypes_[iArch]->containedTypes_.hasType(dontSaveEntityType))
+				skipArchetype[iArch] = 1;
+			else if (archetypes_[iArch]->containedTypes_.hasType(dontSaveEntityType))
 				skipArchetype[iArch] = 1;
 		}
 
@@ -248,7 +250,7 @@ namespace ecs
 			std::vector<const Archetype*> archetypesToSave = { archetype };
 			for (size_t iArchToCheck = iArch + 1; iArchToCheck < archetypes_.size(); iArchToCheck++)
 			{
-				if (skipArchetype[iArch])
+				if (skipArchetype[iArchToCheck])
 					continue;
 				auto archetypeToMerge = archetypes_[iArchToCheck].get();
 				typeIdList typeIdsToCheck = archetypeToMerge->containedTypes_.createTypeListWithOnlySavedComponents(typeIds_);
@@ -260,38 +262,45 @@ namespace ecs
 				archetypesToSave.push_back(archetypeToMerge);
 			}
 
-			size_t entityCount = 0;
+			int chunkIndex = 0;
 			for (auto arch : archetypesToSave)
 			{
-				for (auto& entity : arch->entityIds_)
+				for (auto& chunk : arch->chunks)
 				{
-					auto& entityMapEntry = entityMapCopy[entity];
-					entityMapEntry.archetypeIndex = archetypeIndex;
-					entityMapEntry.elementIndex = (int)entityCount;
-					entityCount++;
+					if (!chunk || chunk->size == 0)
+						continue;
+
+					auto entityIds = chunk->getEntityIds();
+					for (int iEntity = 0; iEntity < chunk->size; iEntity++)
+					{
+						auto entity = entityIds[iEntity];
+						auto& entityMapEntry = entityMapCopy[entity];
+						entityMapEntry.archetypeIndex = archetypeIndex;
+						entityMapEntry.chunkIndex = chunkIndex;
+						entityMapEntry.elementIndex = iEntity;
+					}
+					chunkIndex++;
 				}
 			}
 
-			if (entityCount == 0)
+			if (chunkIndex == 0)
 				continue;
 
 			archetypeIndex++;
 
 			typeIdsToSave.save(stream);
-			stream.write((const char*)&entityCount, sizeof(entityCount));
+
+			size_t chunkCount = chunkIndex;
+			stream.write((char*)&chunkCount, sizeof(chunkCount));
 
 			for (auto arch : archetypesToSave)
 			{
-				stream.write((const char*)arch->entityIds_.data(), arch->entityIds_.size() * sizeof(entityId));
-			}
-
-			auto typesSortedByIndex = typeIdsToSave.calcTypeIds(typeIds_);
-			for (auto t : typesSortedByIndex)
-			{
-				for (auto arch : archetypesToSave)
+				for (auto& chunk : arch->chunks)
 				{
-					auto it = arch->componentArrays_.find(t);
-					it->second->save(stream);
+					if (!chunk || chunk->size == 0)
+						continue;
+
+					chunk->save(stream);
 				}
 			}
 		}
@@ -309,12 +318,10 @@ namespace ecs
 		}
 
 		stream.write((char*)&nextEntityId, sizeof(nextEntityId));
-#endif
 	}
 	
 	void Ecs::load(std::istream& stream)
 	{
-#if 0
 		entityDataIndexMap_.clear();
 		archetypes_.clear();
 		entityCommandBuffer_.clear();
@@ -344,8 +351,8 @@ namespace ecs
 			if (loadedTypeIds.isEmpty())
 				break;
 
-			auto& itArch = archetypes_.emplace_back(std::make_unique<Archetype>());
-			itArch->load(stream, loadedTypeIds, typeIds_, componentArrayFactory_);
+			auto [archIndex, archetype] = createArchetype(loadedTypeIds);
+			archetype->load(stream, typeIdsByLoadedIndex);
 		}
 
 		size_t entityCount = 0;
@@ -356,10 +363,9 @@ namespace ecs
 			stream.read((char*)&id, sizeof(id));
 			entityDataIndex dataIndex;
 			stream.read((char*)&dataIndex, sizeof(dataIndex));
-			entityDataIndexMap_[id] = dataIndex;
+			setEntityIndexMap(id, dataIndex);
 		}
 
 		stream.read((char*)&nextEntityId, sizeof(nextEntityId));
-#endif
 	}
 }

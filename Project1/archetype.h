@@ -24,7 +24,7 @@ namespace ecs
 		std::tuple<entityDataIndex, entityId> setSharedComponent(entityId id, entityDataIndex currentIndex, const T& sharedComponentValue);
 
 		void save(std::ostream& stream) const;
-		void load(std::istream& stream, const typeIdList& typeIds, const std::vector<typeId>& allRegisterTypeIds, const ComponentArrayFactory& componentFactory);
+		void load(std::istream& stream, const std::vector<typeId>& typeIdsByLoadedIndex);
 
 	private:
 		void deleteChunk(int chunkIndex);

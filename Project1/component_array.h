@@ -12,7 +12,7 @@ namespace ecs
 		virtual void deleteEntity(int elementIndex, int lastValidElementIndex) = 0;
 		virtual void copyFromArray(int sourceElementIndex, const ComponentArrayBase* sourceArray, int destElementIndex) = 0;
 		virtual void moveFromArray(int sourceElementIndex, const ComponentArrayBase* sourceArray, int destElementIndex) = 0;
-		virtual void save(std::ostream& stream) const = 0;
+		virtual void save(std::ostream& stream, size_t count) const = 0;
 		virtual void load(std::istream& stream, size_t count) = 0;
 		typeId getTypeId() { return tid; }
 
@@ -88,33 +88,32 @@ namespace ecs
 			return equals(*getElement(0), *static_cast<const ComponentArray<T>*>(other)->getElement(0));
 		}
 
-		void save(std::ostream& stream) const override
+		void save(std::ostream& stream, size_t entityCount) const override
 		{
-			//if constexpr (std::is_trivially_copyable_v<T>)
-			//{
-			//	stream.write((const char*)components_.data(), components_.size() * sizeof(T));
-			//}
+			if constexpr (std::is_trivially_copyable_v<T>)
+			{
+				stream.write((char*)buffer, entityCount * sizeof(T));
+			}
 			/*else
 			{
-				for (auto& c : components_)
+				for (int i = 0; i < entityCount; i++)
 				{
-					c.save(stream);
+					getElement(i)->save(stream);
 				}
 			}*/
 		}
 
 		void load(std::istream& stream, size_t count) override
 		{
-			//components_.resize(count);
-			//if constexpr (std::is_trivially_copyable_v<T>)
-			//{
-			//	stream.read((char*)components_.data(), count * sizeof(T));
-			//}
+			if constexpr (std::is_trivially_copyable_v<T>)
+			{
+				stream.read((char*)buffer, count * sizeof(T));
+			}
 			/*else
 			{
-				for (auto& c : components_)
+				for(int i = 0; i < count; i++)
 				{
-					c.load(stream);
+					getElement(i)->load(stream);
 				}
 			}*/
 		}
@@ -320,6 +319,67 @@ namespace ecs
 			}
 
 			return nullptr;
+		}
+
+		void save(std::ostream& stream) const
+		{
+			stream.write((char*)&size, sizeof(size));
+			stream.write((char*)&buffer[0], size * sizeof(entityId));
+
+			int lastIndex = -1;
+			size_t componentTypeCount = componentArrays.size();
+			for (int iComp = 0; iComp < componentTypeCount; iComp++)
+			{
+				auto componentArray = componentArrays[iComp].get();
+				if (componentArray->tid->type == ComponentType::State)
+					continue;
+				int componentIndex = componentArray->tid->index;
+				stream.write((char*)&componentIndex, sizeof(componentIndex));
+				componentArray->save(stream, size);
+			}
+			stream.write((char*)&lastIndex, sizeof(lastIndex));
+
+			size_t sharedComponentTypeCount = sharedComponents.size();
+			for (int iComp = 0; iComp < sharedComponentTypeCount; iComp++)
+			{
+				auto componentArray = sharedComponents[iComp].get();
+				if (componentArray->tid->type == ComponentType::State)
+					continue;
+				int componentIndex = componentArray->tid->index;
+				stream.write((char*)&componentIndex, sizeof(componentIndex));
+				componentArray->save(stream, 1);
+			}
+			stream.write((char*)&lastIndex, sizeof(lastIndex));
+		}
+
+		void load(std::istream& stream, const std::vector<typeId>& typeIdsByLoadedIndex)
+		{
+			stream.read((char*)&size, sizeof(size));
+			stream.read((char*)getEntityIds(), size * sizeof(entityId));
+
+			while(true)
+			{
+				int componentIndex;
+				stream.read((char*)&componentIndex, sizeof(componentIndex));
+				if (componentIndex < 0)
+					break;
+
+				typeId componentTypeId = typeIdsByLoadedIndex[componentIndex];
+				auto componentArray = getArray(componentTypeId);
+				componentArray->load(stream, size);
+			}
+
+			while(true)
+			{
+				int componentIndex;
+				stream.read((char*)&componentIndex, sizeof(componentIndex));
+				if (componentIndex < 0)
+					break;
+
+				typeId componentTypeId = typeIdsByLoadedIndex[componentIndex];
+				auto componentArray = getSharedComponentArray(componentTypeId);
+				componentArray->load(stream, 1);
+			}
 		}
 
 		static inline const int bufferCapacity = 1 << 14;	// 16k chunks
