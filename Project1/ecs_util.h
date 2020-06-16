@@ -22,14 +22,17 @@ namespace ecs
 	struct has_operator_equals : detail::has_operator_equals_impl<L, R>::type {};
 
 	template<class T>
-	void makeVectorUniqueAndSorted(std::vector<T>& v)
+	using tempList = std::vector<T>;
+
+	template<class T>
+	void makeVectorUniqueAndSorted(T& v)
 	{
 		std::sort(v.begin(), v.end());
 		v.erase(std::unique(v.begin(), v.end()), v.end());
 	}
 
 	template<class T>
-	void deleteFromVectorUnsorted(std::vector<T>& v, int index)
+	void deleteFromVectorUnsorted(T& v, int index)
 	{
 		if ((int)v.size() - 1 > index)
 		{
@@ -161,7 +164,7 @@ namespace ecs
 			return !(*this == rhs);
 		}
 
-		void addTypes(const std::vector<typeId>& tids)
+		void addTypes(const tempList<typeId>& tids)
 		{
 			for (auto tid : tids)
 			{
@@ -187,7 +190,7 @@ namespace ecs
 #endif
 		}
 
-		void deleteTypes(const std::vector<typeId>& tids)
+		void deleteTypes(const tempList<typeId>& tids)
 		{
 			for (auto t : tids)
 			{

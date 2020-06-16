@@ -23,7 +23,7 @@ namespace ecs
 		template<class T>
 		std::tuple<entityDataIndex, entityId> setSharedComponent(entityDataIndex currentIndex, const T& sharedComponentValue);
 
-		std::tuple<entityDataIndex, entityId> setSharedComponent(entityDataIndex currentIndex, const ComponentData& sharedComponentData);
+		std::tuple<entityDataIndex, entityId> setSharedComponent(entityDataIndex currentIndex, const tempList<ComponentData>& newSharedComponentDatas);
 
 		void save(std::ostream& stream) const;
 		void load(std::istream& stream, const std::vector<typeId>& typeIdsByLoadedIndex);

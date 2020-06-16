@@ -276,7 +276,7 @@ namespace ecs
 			return movedEntityId;
 		}
 
-		int moveEntityFromOtherChunk(Chunk* sourceChunk, int sourceElementIndex, typeId sharedComponentToKeep = nullptr)
+		int moveEntityFromOtherChunk(Chunk* sourceChunk, int sourceElementIndex)
 		{
 			int ret = size;
 			entityId* destEntityIds = getEntityIds();
@@ -297,19 +297,8 @@ namespace ecs
 				}
 			}
 
-			for (int iDestType = 0; iDestType < (int)sharedComponents.size(); iDestType++)
-			{
-				ComponentArrayBase* destArray = sharedComponents[iDestType].get();
-				if (destArray->tid == sharedComponentToKeep)
-				{
-					continue;
-				}
-				ComponentArrayBase* sourceArray = sourceChunk->getSharedComponentArray(destArray->tid);
-				if (sourceArray)
-				{
-					destArray->copyFromArray(0, sourceArray, 0);
-				}
-			}
+			// Shared components should already be fine because the target chunk was selected (or created) with those in mind.
+			
 			size++;
 			return ret;
 		}

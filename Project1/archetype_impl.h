@@ -235,7 +235,7 @@ namespace ecs
 			std::vector<uint8_t> sharedComponentData(componentTypeId->size);
 			stream.read((char*)sharedComponentData.data(), componentTypeId->size);
 
-			auto [currentEntityIndex, movedEntityId] = setSharedComponent(loadedEntityIndex, { componentTypeId, (void*)sharedComponentData.data() });
+			auto [currentEntityIndex, movedEntityId] = setSharedComponent(loadedEntityIndex, { { componentTypeId, (void*)sharedComponentData.data() } });
 			ecs->setEntityIndexMap(id, currentEntityIndex);
 			if(movedEntityId)
 				ecs->setEntityIndexMap(movedEntityId, loadedEntityIndex);
@@ -249,16 +249,27 @@ namespace ecs
 	std::tuple<entityDataIndex, entityId> Archetype::setSharedComponent(entityDataIndex currentIndex, const T& newSharedComponentValue)
 	{
 		typeId sharedType = ecs->getTypeId<T>();
-		return setSharedComponent(currentIndex, ComponentData{ sharedType, (void*)&newSharedComponentValue });
+		return setSharedComponent(currentIndex, tempList<ComponentData>{ ComponentData{ sharedType, (void*)&newSharedComponentValue } });
 	}
 
-	std::tuple<entityDataIndex, entityId> Archetype::setSharedComponent(entityDataIndex currentIndex, const ComponentData& newSharedComponentData)
+	std::tuple<entityDataIndex, entityId> Archetype::setSharedComponent(entityDataIndex currentIndex, const tempList<ComponentData>& newSharedComponentDatas)
 	{
 		Chunk* currentChunk = chunks[currentIndex.chunkIndex].get();
-		typeId sharedComponentType = newSharedComponentData.tid;
-		ComponentData originalSharedComponentData = currentChunk->getSharedComponentData(sharedComponentType);
-		if (originalSharedComponentData.equals(newSharedComponentData))
-		{	// no need to change anything
+
+		bool noSharedDataChanged = true;
+		for(auto& newData : newSharedComponentDatas)
+		{
+			typeId sharedComponentType = newData.tid;
+			ComponentData originalSharedComponentData = currentChunk->getSharedComponentData(sharedComponentType);
+			if (!newData.equals(originalSharedComponentData))
+			{
+				noSharedDataChanged = false;
+				break;
+			}
+		}
+
+		if (noSharedDataChanged)
+		{
 			return { currentIndex, 0 };
 		}
 
@@ -270,15 +281,37 @@ namespace ecs
 			Chunk* c = chunks[iChunk].get();
 			if (!c) continue;
 
-			const ComponentData sharedData = c->getSharedComponentData(sharedComponentType);
-			if (sharedData.equals(newSharedComponentData))
+			bool allNewDataIsFound = true;
+
+			for (auto& newData : newSharedComponentDatas)
+			{
+				const ComponentData sharedData = c->getSharedComponentData(newData.tid);
+				if (!sharedData.equals(newData))
+				{
+					allNewDataIsFound = false;
+					break;
+				}
+			}
+
+			if (allNewDataIsFound)
 			{
 				// Check all the other shared values
 				bool allSharedComponentsAreEqual = true;
 				for (int iSharedType = 0; iSharedType < (int)currentChunk->sharedComponents.size(); iSharedType++)
 				{
 					auto componentToCheck = c->sharedComponents[iSharedType].get();
-					if (componentToCheck->tid == sharedComponentType)
+
+					bool alreadyChecked = false;
+					for (auto& newData : newSharedComponentDatas)
+					{
+						if (newData.tid == componentToCheck->tid)
+						{
+							alreadyChecked = true;
+							break;
+						}
+					}
+
+					if (alreadyChecked)
 						continue;
 
 					if (!componentToCheck->isSameAsSharedComponent(currentChunk->sharedComponents[iSharedType].get()))
@@ -310,19 +343,35 @@ namespace ecs
 			for (int iSharedType = 0; iSharedType < (int)currentChunk->sharedComponents.size(); iSharedType++)
 			{
 				auto componentToCopy = currentChunk->sharedComponents[iSharedType].get();
-				if (componentToCopy->tid == sharedComponentType)
+
+				bool hasNewData = false;
+				for (auto& newData : newSharedComponentDatas)
+				{
+					if (newData.tid == componentToCopy->tid)
+					{
+						hasNewData = true;
+						break;
+					}
+				}
+
+				if (hasNewData)
 					continue;
 
+				// Didnt specify new data, copy from the old one
 				newChunkPtr->sharedComponents[iSharedType]->copyFromArray(0, componentToCopy, 0);
 			}
 
-			ComponentData sharedValue = newChunkPtr->getSharedComponentData(sharedComponentType);
-			memcpy(sharedValue.data, newSharedComponentData.data, sharedComponentType->size);
+			// Set the new data from the shared components
+			for (auto& newData : newSharedComponentDatas)
+			{
+				ComponentData sharedValue = newChunkPtr->getSharedComponentData(newData.tid);
+				memcpy(sharedValue.data, newData.data, newData.tid->size);
+			}
 			newChunk = newChunkPtr.get();
 			newChunkIndex = (int)chunks.size() - 1;
 		}
 
-		int newElementIndex = newChunk->moveEntityFromOtherChunk(currentChunk, currentIndex.elementIndex, sharedComponentType);
+		int newElementIndex = newChunk->moveEntityFromOtherChunk(currentChunk, currentIndex.elementIndex);
 		entityId movedEntityId = currentChunk->deleteEntity(currentIndex.elementIndex);
 		if (currentChunk->size == 0)
 		{
