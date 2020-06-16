@@ -477,7 +477,35 @@ namespace ecs
 			setDefaultValue(defaultValues...);
 		}
 
+		template<class T>
+		void saveComponent(std::ostream& stream, const typeId& tid, const T& value, ComponentType expectedType) const
+		{
+			if (tid->type != expectedType)
+				return;
+
+			int componentIndex = tid->index;
+			stream.write((char*)&componentIndex, sizeof(componentIndex));
+			stream.write((char*)&value, sizeof(value));
+		}
+
+		template<size_t... Is>
+		void saveComponents(std::ostream& stream, ComponentType expectedType, const typeId typeIds[sizeof...(Ts)], std::index_sequence<Is...>) const
+		{
+			auto tmp = { (saveComponent(stream, typeIds[Is], std::get<Is>(defaultValues), expectedType), 0)... };
+		}
+
 		std::tuple<Ts...> defaultValues;
+	};
+	
+	struct ComponentData
+	{
+		typeId tid;
+		void* data;
+
+		bool equals(const ComponentData& rhs) const
+		{
+			return tid == rhs.tid && (memcmp(data, rhs.data, tid->size) == 0);
+		}
 	};
 
 	struct DontSaveEntity {};

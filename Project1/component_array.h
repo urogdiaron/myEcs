@@ -18,6 +18,17 @@ namespace ecs
 
 		virtual bool isSameAsSharedComponent(const ComponentArrayBase* other) const = 0;
 
+		ComponentData getElementData(int elementIndex)
+		{
+			ComponentData ret;
+			ret.tid = tid;
+			ret.data = buffer + elementSize * elementIndex;
+			return ret;
+		}
+
+		virtual void saveElement(std::ostream& stream, int elementIndex) const = 0;
+		virtual void loadElement(std::istream& stream, int elementIndex) = 0;
+
 		uint8_t* buffer;
 		int elementSize;
 		typeId tid;
@@ -74,6 +85,11 @@ namespace ecs
 			return &tBuffer[elementIndex];
 		}
 
+		bool isElementEqualStreamed(const uint8_t* data, int elementIndex) const
+		{
+			return memcmp(data, getElement(elementIndex), elementSize) == 0;
+		}
+
 		bool isSameAsSharedComponent(const ComponentArrayBase* other) const override
 		{
 			if (other->tid != tid)
@@ -103,6 +119,14 @@ namespace ecs
 			}*/
 		}
 
+		void saveElement(std::ostream& stream, int elementIndex) const override
+		{
+			if constexpr (std::is_trivially_copyable_v<T>)
+			{
+				stream.write((char*)(buffer + elementIndex * elementSize), elementSize);
+			}
+		}
+
 		void load(std::istream& stream, size_t count) override
 		{
 			if constexpr (std::is_trivially_copyable_v<T>)
@@ -116,6 +140,14 @@ namespace ecs
 					getElement(i)->load(stream);
 				}
 			}*/
+		}
+
+		void loadElement(std::istream& stream, int elementIndex) override
+		{
+			if constexpr (std::is_trivially_copyable_v<T>)
+			{
+				stream.read((char*)(buffer + elementIndex * elementSize), elementSize);
+			}
 		}
 	};
 
@@ -321,6 +353,18 @@ namespace ecs
 			return nullptr;
 		}
 
+		ComponentData getSharedComponentData(typeId tid)
+		{
+			ComponentData ret {tid};
+			for (auto& componentArray : sharedComponents)
+			{
+				if (componentArray->tid == tid)
+					ret = componentArray->getElementData(0);
+			}
+
+			return ret;
+		}
+
 		void save(std::ostream& stream) const
 		{
 			stream.write((char*)&size, sizeof(size));
@@ -379,6 +423,33 @@ namespace ecs
 				typeId componentTypeId = typeIdsByLoadedIndex[componentIndex];
 				auto componentArray = getSharedComponentArray(componentTypeId);
 				componentArray->load(stream, 1);
+			}
+		}
+
+		void saveElement(std::ostream& stream, int elementIndex) const
+		{
+			for (auto& componentArray : componentArrays)
+			{
+				stream.write((char*)&componentArray->tid->index, sizeof(componentArray->tid->index));
+				componentArray->saveElement(stream, elementIndex);
+			}
+			int invalidIndex = -1;
+			stream.write((char*)&invalidIndex, sizeof(invalidIndex));
+
+		}
+
+		void loadElement(std::istream& stream, const std::vector<typeId>& typeIdsByLoadedIndex, int elementIndex)
+		{
+			while (true)
+			{
+				int componentIndex;
+				stream.read((char*)&componentIndex, sizeof(componentIndex));
+				if (componentIndex < 0)
+					break;
+
+				typeId componentTypeId = typeIdsByLoadedIndex[componentIndex];
+				auto componentArray = getArray(componentTypeId);
+				componentArray->loadElement(stream, elementIndex);
 			}
 		}
 

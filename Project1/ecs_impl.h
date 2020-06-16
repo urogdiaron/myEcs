@@ -210,6 +210,83 @@ namespace ecs
 		//	_ASSERT_EXPR(0, "released type is not locked");
 	}
 
+	void Ecs::savePrefab(std::ostream& stream, entityId id) const
+	{
+		auto it = entityDataIndexMap_.find(id);
+		if (it == entityDataIndexMap_.end())
+			return;
+
+		size_t count = typeDescriptors_.size();
+		stream.write((char*)&count, sizeof(size_t));
+		for (auto& t : typeDescriptors_)
+		{
+			stream.write((const char*)&t->index, sizeof(t->index));
+			count = t->name.size();
+			stream.write((char*)&count, sizeof(size_t));
+			stream.write(t->name.data(), count);
+		}
+
+	 	auto archetype = archetypes_[it->second.archetypeIndex].get();
+		auto typeList = archetype->containedTypes_.createTypeListWithOnlySavedComponents(typeIds_);
+		typeList.save(stream);
+
+		archetype->savePrefab(stream, it->second);
+	}
+
+	entityId Ecs::createEntityFromPrefabStream(std::istream& stream)
+	{
+		size_t typeDescCount = 0;
+		stream.read((char*)&typeDescCount, sizeof(typeDescCount));
+		std::vector<typeId> typeIdsByLoadedIndex(typeDescCount);
+		for (size_t i = 0; i < typeDescCount; i++)
+		{
+			TypeDescriptor td;
+			stream.read((char*)&td.index, sizeof(td.index));
+			size_t count;
+			stream.read((char*)&count, sizeof(count));
+			td.name.resize(count);
+			stream.read(td.name.data(), count);
+
+			typeId id = getTypeIdByName(td.name);
+			typeIdsByLoadedIndex[td.index] = id;
+		}
+
+		typeIdList loadedTypeIds = getTypeIds<>();
+		loadedTypeIds.load(stream, typeIdsByLoadedIndex);
+
+		entityId newEntityId = nextEntityId++;
+		auto [archIndex, archetype] = createArchetype(loadedTypeIds);
+		entityDataIndex newIndex = archetype->createEntityFromStream(stream, typeIdsByLoadedIndex, newEntityId);
+		setEntityIndexMap(newEntityId, newIndex);
+		return newEntityId;
+	}
+
+	template<class... Ts>
+	void Ecs::savePrefab(std::ostream& stream, const Prefab<Ts...>& prefab)
+	{
+		size_t count = typeDescriptors_.size();
+		stream.write((char*)&count, sizeof(size_t));
+		for (auto& t : typeDescriptors_)
+		{
+			stream.write((const char*)&t->index, sizeof(t->index));
+			count = t->name.size();
+			stream.write((char*)&count, sizeof(size_t));
+			stream.write(t->name.data(), count);
+		}
+
+		typeIdList typeIds = getTypeIds<Ts...>();
+		typeIds.save(stream);
+
+		typeId prefabTypes[] = { getTypeId<Ts>()... };
+		prefab.saveComponents(stream, ComponentType::Regular, prefabTypes, std::index_sequence_for<Ts...>());
+		int invalidIndex = -1;
+		stream.write((char*)&invalidIndex, sizeof(invalidIndex));
+
+		prefab.saveComponents(stream, ComponentType::Shared, prefabTypes, std::index_sequence_for<Ts...>());
+		invalidIndex = -1;
+		stream.write((char*)&invalidIndex, sizeof(invalidIndex));
+	}
+
 	void Ecs::save(std::ostream& stream) const
 	{
 		size_t count = typeDescriptors_.size();

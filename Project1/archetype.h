@@ -21,10 +21,14 @@ namespace ecs
 
 		// return the new entityDataIndex of the entity and the entityId that moved to its original place
 		template<class T>
-		std::tuple<entityDataIndex, entityId> setSharedComponent(entityId id, entityDataIndex currentIndex, const T& sharedComponentValue);
+		std::tuple<entityDataIndex, entityId> setSharedComponent(entityDataIndex currentIndex, const T& sharedComponentValue);
+
+		std::tuple<entityDataIndex, entityId> setSharedComponent(entityDataIndex currentIndex, const ComponentData& sharedComponentData);
 
 		void save(std::ostream& stream) const;
 		void load(std::istream& stream, const std::vector<typeId>& typeIdsByLoadedIndex);
+		void savePrefab(std::ostream& stream, entityDataIndex entityIndex) const;
+		entityDataIndex createEntityFromStream(std::istream& stream, const std::vector<typeId>& typeIdsByLoadedIndex, entityId id);
 
 	private:
 		void deleteChunk(int chunkIndex);

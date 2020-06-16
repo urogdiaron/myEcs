@@ -195,13 +195,69 @@ namespace ecs
 		}
 	}
 
+	void Archetype::savePrefab(std::ostream& stream, entityDataIndex entityIndex) const
+	{
+		auto chunk = chunks[entityIndex.chunkIndex].get();
+		chunk->saveElement(stream, entityIndex.elementIndex);
+
+		for (auto& sharedComponentArray : chunk->sharedComponents)
+		{
+			int componentIndex = sharedComponentArray->tid->index;
+			stream.write((char*)&componentIndex, sizeof(componentIndex));
+
+			ComponentData sharedComponentData = sharedComponentArray->getElementData(entityIndex.elementIndex);
+			stream.write((char*)sharedComponentData.data, sizeof(sharedComponentArray->tid->size));
+		}
+
+		int invalidComponentIndex = -1;
+		stream.write((char*)&invalidComponentIndex, sizeof(invalidComponentIndex));
+	}
+
+	entityDataIndex Archetype::createEntityFromStream(std::istream& stream, const std::vector<typeId>& typeIdsByLoadedIndex, entityId id)
+	{
+		entityDataIndex loadedEntityIndex;
+		loadedEntityIndex.archetypeIndex = archetypeIndex;
+		auto chunk = getOrCreateChunkForNewEntity();
+		loadedEntityIndex.chunkIndex = currentlyFilledChunkIndex;
+		loadedEntityIndex.elementIndex = chunk->createEntity(id);
+
+		chunk->loadElement(stream, typeIdsByLoadedIndex, loadedEntityIndex.elementIndex);
+		ecs->setEntityIndexMap(id, loadedEntityIndex);
+
+		while (true)
+		{
+			int componentIndex;
+			stream.read((char*)&componentIndex, sizeof(componentIndex));
+			if (componentIndex < 0)
+				break;
+
+			typeId componentTypeId = typeIdsByLoadedIndex[componentIndex];
+			std::vector<uint8_t> sharedComponentData(componentTypeId->size);
+			stream.read((char*)sharedComponentData.data(), componentTypeId->size);
+
+			auto [currentEntityIndex, movedEntityId] = setSharedComponent(loadedEntityIndex, { componentTypeId, (void*)sharedComponentData.data() });
+			ecs->setEntityIndexMap(id, currentEntityIndex);
+			if(movedEntityId)
+				ecs->setEntityIndexMap(movedEntityId, loadedEntityIndex);
+
+			loadedEntityIndex = currentEntityIndex;
+		}
+		return loadedEntityIndex;
+	}
+
 	template<class T>
-	std::tuple<entityDataIndex, entityId> Archetype::setSharedComponent(entityId id, entityDataIndex currentIndex, const T& newSharedComponentValue)
+	std::tuple<entityDataIndex, entityId> Archetype::setSharedComponent(entityDataIndex currentIndex, const T& newSharedComponentValue)
+	{
+		typeId sharedType = ecs->getTypeId<T>();
+		return setSharedComponent(currentIndex, ComponentData{ sharedType, (void*)&newSharedComponentValue });
+	}
+
+	std::tuple<entityDataIndex, entityId> Archetype::setSharedComponent(entityDataIndex currentIndex, const ComponentData& newSharedComponentData)
 	{
 		Chunk* currentChunk = chunks[currentIndex.chunkIndex].get();
-		typeId sharedComponentType = ecs->getTypeId<T>();
-		const T* originalSharedComponent = currentChunk->getSharedComponent<T>(sharedComponentType);
-		if (equals(*originalSharedComponent, newSharedComponentValue))
+		typeId sharedComponentType = newSharedComponentData.tid;
+		ComponentData originalSharedComponentData = currentChunk->getSharedComponentData(sharedComponentType);
+		if (originalSharedComponentData.equals(newSharedComponentData))
 		{	// no need to change anything
 			return { currentIndex, 0 };
 		}
@@ -214,8 +270,8 @@ namespace ecs
 			Chunk* c = chunks[iChunk].get();
 			if (!c) continue;
 
-			const T* sharedValue = c->getSharedComponent<T>(sharedComponentType);
-			if (equals(*sharedValue, newSharedComponentValue))
+			const ComponentData sharedData = c->getSharedComponentData(sharedComponentType);
+			if (sharedData.equals(newSharedComponentData))
 			{
 				// Check all the other shared values
 				bool allSharedComponentsAreEqual = true;
@@ -260,8 +316,8 @@ namespace ecs
 				newChunkPtr->sharedComponents[iSharedType]->copyFromArray(0, componentToCopy, 0);
 			}
 
-			T* sharedValue = newChunkPtr->getSharedComponent<T>(sharedComponentType);
-			*sharedValue = newSharedComponentValue;
+			ComponentData sharedValue = newChunkPtr->getSharedComponentData(sharedComponentType);
+			memcpy(sharedValue.data, newSharedComponentData.data, sharedComponentType->size);
 			newChunk = newChunkPtr.get();
 			newChunkIndex = (int)chunks.size() - 1;
 		}

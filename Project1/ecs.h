@@ -184,7 +184,7 @@ namespace ecs
 		{
 			entityDataIndex oldEntityIndex = entityDataIndexMap_[id];
 			Archetype* archetype = archetypes_[oldEntityIndex.archetypeIndex].get();
-			auto [newEntityIndex, movedId] = archetype->setSharedComponent(id, oldEntityIndex, value);
+			auto [newEntityIndex, movedId] = archetype->setSharedComponent(oldEntityIndex, value);
 			entityDataIndexMap_[id] = newEntityIndex;
 			if (movedId)
 				setEntityIndexMap(movedId, oldEntityIndex);
@@ -385,6 +385,12 @@ public:
 			return ret;
 		}
 
+		void savePrefab(std::ostream& stream, entityId id) const;
+
+		template<class... Ts>
+		void savePrefab(std::ostream& stream, const Prefab<Ts...>& prefab);
+
+		entityId createEntityFromPrefabStream(std::istream& stream);
 		void save(std::ostream& stream) const;
 		void load(std::istream& stream);
 
