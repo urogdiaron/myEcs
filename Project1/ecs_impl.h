@@ -52,6 +52,38 @@ namespace ecs
 		return newEntityId;
 	}
 
+	template<class T>
+	void addSharedComponentDataToList(tempList<ComponentData>& outList, const T& componentValue, typeId tid)
+	{
+		if (tid->type == ComponentType::Shared)
+		{
+			outList.push_back(ComponentData{ tid, (void*)&componentValue });
+		}
+	}
+
+	template<class... Ts>
+	tempList<ComponentData> Ecs::createSharedComponentDataList(const Ts&... componentValues)
+	{
+		tempList<ComponentData> ret;
+		auto tmp = {(addSharedComponentDataToList(ret, componentValues, getTypeId<Ts>()), 0)...};
+		return ret;
+	}
+
+	template<class ...Ts>
+	entityId Ecs::createEntityAndInitialize(const Ts&... initialValue)
+	{
+		EASY_BLOCK("createEntityAndInitialize");
+		entityId newEntityId = nextEntityId++;
+		typeIdList typeIds = getTypeIds<Ts...>();
+		auto [archIndex, archetype] = createArchetype(typeIds);
+		entityDataIndex newIndex = archetype->allocateEntity(createSharedComponentDataList(initialValue...));
+		Chunk* chunk = archetype->chunks[newIndex.chunkIndex].get();
+		chunk->getEntityIds()[newIndex.elementIndex] = newEntityId;
+		chunk->setInitialComponentValues(newIndex.elementIndex, initialValue...);
+		setEntityIndexMap(newEntityId, newIndex);
+		return newEntityId;
+	}
+
 	// If you call this from the outside, keepStateComponents needs to be true. False is only for internal usage.
 	bool Ecs::deleteEntity(entityId id, bool keepStateComponents)
 	{

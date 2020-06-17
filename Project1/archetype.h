@@ -12,13 +12,15 @@ namespace ecs
 		entityDataIndex createEntity(entityId id);
 		entityId deleteEntity(const entityDataIndex& index); // returns the entity that moved to this index (can be invalid)
 		entityDataIndex moveFromEntity(entityId id, const entityDataIndex& sourceIndex); // source will become invalid but won't get deleted
+		entityDataIndex allocateEntity(const tempList<ComponentData>& sharedComponentDatas);
 
 		ComponentArrayBase* get_(typeId tid);
 		bool hasAllComponents(const typeQueryList& query) const;
 
 		Chunk* getOrCreateChunkForNewEntity();
-		std::tuple<Chunk*, int> getOrCreateChunkForMovedEntity(entityDataIndex currentIndex);
+		std::tuple<Chunk*, int> getOrCreateChunkForNewEntity(const tempList<ComponentData>& sharedComponentDatas);
 
+		std::tuple<Chunk*, int> getOrCreateChunkForMovedEntity(entityDataIndex currentIndex);
 		// return the new entityDataIndex of the entity and the entityId that moved to its original place
 		template<class T>
 		std::tuple<entityDataIndex, entityId> setSharedComponent(entityDataIndex currentIndex, const T& sharedComponentValue);
@@ -31,6 +33,7 @@ namespace ecs
 		entityDataIndex createEntityFromStream(std::istream& stream, const std::vector<typeId>& typeIdsByLoadedIndex, entityId id);
 
 	private:
+		std::tuple<Chunk*, int> createChunk();
 		void deleteChunk(int chunkIndex);
 
 	public:

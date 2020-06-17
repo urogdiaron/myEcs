@@ -16,6 +16,7 @@ namespace ecs
 		friend struct View;
 
 		friend struct Archetype;
+		friend struct Chunk;
 		
 		template<typename...>
 		friend struct EntityCommand_Create;
@@ -125,6 +126,9 @@ namespace ecs
 		}
 
 		template<class... Ts>
+		tempList<ComponentData> createSharedComponentDataList(const Ts&... componentValues);
+
+		template<class... Ts>
 		View<Ts...> view()
 		{
 			return View<Ts...>(*this);
@@ -193,7 +197,9 @@ namespace ecs
 		template<class ...Ts>
 		entityId createEntity(const Prefab<Ts...>& prefab)
 		{
-			return std::apply([&](auto& ...x) { return createEntity<Ts...>(x...); }, prefab.defaultValues);
+			if(oldPrefabCreation)
+				return std::apply([&](auto& ...x) { return createEntity<Ts...>(x...); }, prefab.defaultValues);
+			return std::apply([&](auto& ...x) { return createEntityAndInitialize(x...); }, prefab.defaultValues);
 		}
 
 		template<class ...Ts, class ...Us>
@@ -214,10 +220,14 @@ namespace ecs
 		template<class ...Ts>
 		entityId createEntity(const Ts&... initialValue)
 		{
+			EASY_BLOCK("createEntity");
 			entityId ret = createEntity_impl(getTypeIds<Ts...>());
 			int tmp[] = {(setComponent(ret, initialValue), 0)...};
 			return ret;
 		}
+
+		template<class ...Ts>
+		entityId createEntityAndInitialize(const Ts&... initialValue);
 
 		// If you call this from the outside, keepStateComponents needs to be true. False is only for internal usage.
 		bool deleteEntity(entityId id, bool keepStateComponents = true);
@@ -409,5 +419,7 @@ public:
 
 		entityId nextEntityId = 1;
 		std::atomic<entityId> nextTempEntityId = 1;
+
+		bool oldPrefabCreation = false;
 	};
 }

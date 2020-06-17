@@ -36,6 +36,16 @@ namespace ecs
 		ret.elementIndex = chunk->createEntity(id);
 		return ret;
 	}
+
+	entityDataIndex Archetype::allocateEntity(const tempList<ComponentData>& sharedComponentDatas)
+	{
+		entityDataIndex ret;
+		auto [chunk, chunkIndex] = getOrCreateChunkForNewEntity(sharedComponentDatas);
+		ret.archetypeIndex = archetypeIndex;
+		ret.chunkIndex = chunkIndex;
+		ret.elementIndex = chunk->allocateEntity();
+		return ret;
+	}
 	
 	entityId Archetype::deleteEntity(const entityDataIndex& index)
 	{
@@ -67,6 +77,33 @@ namespace ecs
 	bool Archetype::hasAllComponents(const typeQueryList& query) const
 	{
 		return query.check(containedTypes_);
+	}
+
+	std::tuple<Chunk*, int> Archetype::createChunk()
+	{
+		int newChunkIndex = -1;
+		Chunk* newChunk = nullptr;
+		for (int iChunk = 0; iChunk < (int)chunks.size(); iChunk++)
+		{
+			if (!chunks[iChunk])
+			{
+				chunks[iChunk] = std::make_unique<Chunk>(this, containedTypes_.calcTypeIds(ecs->typeIds_), ecs->componentArrayFactory_);
+				newChunk = chunks[iChunk].get();
+				newChunkIndex = iChunk;
+				break;
+			}
+		}
+
+		if (newChunkIndex < 0)
+		{
+			newChunkIndex = (int)chunks.size();
+			auto& newChunkPtr = chunks.emplace_back(
+				std::make_unique<Chunk>(this, containedTypes_.calcTypeIds(ecs->typeIds_), ecs->componentArrayFactory_)
+			);
+			newChunk = newChunkPtr.get();
+		}
+
+		return { newChunk, newChunkIndex };
 	}
 
 	Chunk* Archetype::getOrCreateChunkForNewEntity()
@@ -166,6 +203,44 @@ namespace ecs
 				auto srcArray = currentChunk->getSharedComponentArray(destArray->tid);
 				destArray->copyFromArray(0, srcArray, 0);
 			}
+		}
+
+		return { newChunk, newChunkIndex };
+	}
+
+	std::tuple<Chunk*, int> Archetype::getOrCreateChunkForNewEntity(const tempList<ComponentData>& sharedComponentDatas)
+	{
+		for (int iChunk = 0; iChunk < (int)chunks.size(); iChunk++)
+		{
+			// Find a chunk with these shared components, that's not full
+			Chunk* c = chunks[iChunk].get();
+			if (!c || c->size >= c->entityCapacity) continue;	
+
+			bool allDataIsFound = true;
+
+			for (auto& newData : sharedComponentDatas)
+			{
+				const ComponentData sharedData = c->getSharedComponentData(newData.tid);
+				if (!sharedData.equals(newData))
+				{
+					allDataIsFound = false;
+					break;
+				}
+			}
+
+			if (allDataIsFound)
+			{
+				return { c, iChunk };
+			}
+		}
+
+		auto [newChunk, newChunkIndex] = createChunk();
+
+		// Set the new data from the shared components
+		for (auto& newData : sharedComponentDatas)
+		{
+			ComponentData sharedValue = newChunk->getSharedComponentData(newData.tid);
+			memcpy(sharedValue.data, newData.data, newData.tid->size);
 		}
 
 		return { newChunk, newChunkIndex };

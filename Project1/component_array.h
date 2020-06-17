@@ -251,6 +251,13 @@ namespace ecs
 			return entityIndex;
 		}
 
+		int allocateEntity()
+		{
+			int entityIndex = size;
+			size++;
+			return entityIndex;
+		}
+
 		// return value is the entity id that was moved to this position
 		entityId deleteEntity(int elementIndex)
 		{
@@ -352,6 +359,21 @@ namespace ecs
 			}
 
 			return ret;
+		}
+
+		template<class T>
+		void setInitialComponentValue(int elementIndex, const T& value, typeId tid)
+		{
+			if (tid->type != ComponentType::Regular || tid->size == 0)
+				return;
+			auto componentArray = getArray(tid);
+			new (&componentArray->buffer[elementIndex * componentArray->elementSize]) T{ value };
+		}
+
+		template<class... Ts>
+		void setInitialComponentValues(int elementIndex, const Ts&... values)
+		{
+			auto tmp = {(setInitialComponentValue(elementIndex, values, archetype->ecs->getTypeId<Ts>()), 0)...};
 		}
 
 		void save(std::ostream& stream) const
