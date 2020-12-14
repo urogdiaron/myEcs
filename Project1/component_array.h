@@ -12,8 +12,8 @@ namespace ecs
 		virtual void deleteEntity(int elementIndex, int lastValidElementIndex) = 0;
 		virtual void copyFromArray(int sourceElementIndex, const ComponentArrayBase* sourceArray, int destElementIndex) = 0;
 		virtual void moveFromArray(int sourceElementIndex, const ComponentArrayBase* sourceArray, int destElementIndex) = 0;
-		virtual void save(std::ostream& stream, size_t count) const = 0;
-		virtual void load(std::istream& stream, size_t count) = 0;
+		virtual void save(istream& stream, size_t count) const = 0;
+		virtual void load(istream& stream, size_t count) = 0;
 		typeId getTypeId() { return tid; }
 
 		virtual bool isSameAsSharedComponent(const ComponentArrayBase* other) const = 0;
@@ -26,8 +26,8 @@ namespace ecs
 			return ret;
 		}
 
-		virtual void saveElement(std::ostream& stream, int elementIndex) const = 0;
-		virtual void loadElement(std::istream& stream, int elementIndex) = 0;
+		virtual void saveElement(istream& stream, int elementIndex) const = 0;
+		virtual void loadElement(istream& stream, int elementIndex) = 0;
 
 		uint8_t* buffer;
 		int elementSize;
@@ -104,7 +104,7 @@ namespace ecs
 			return equals(*getElement(0), *static_cast<const ComponentArray<T>*>(other)->getElement(0));
 		}
 
-		void save(std::ostream& stream, size_t entityCount) const override
+		void save(istream& stream, size_t entityCount) const override
 		{
 			if constexpr (std::is_trivially_copyable_v<T>)
 			{
@@ -119,7 +119,7 @@ namespace ecs
 			}*/
 		}
 
-		void saveElement(std::ostream& stream, int elementIndex) const override
+		void saveElement(istream& stream, int elementIndex) const override
 		{
 			if constexpr (std::is_trivially_copyable_v<T>)
 			{
@@ -127,7 +127,7 @@ namespace ecs
 			}
 		}
 
-		void load(std::istream& stream, size_t count) override
+		void load(istream& stream, size_t count) override
 		{
 			if constexpr (std::is_trivially_copyable_v<T>)
 			{
@@ -142,7 +142,7 @@ namespace ecs
 			}*/
 		}
 
-		void loadElement(std::istream& stream, int elementIndex) override
+		void loadElement(istream& stream, int elementIndex) override
 		{
 			if constexpr (std::is_trivially_copyable_v<T>)
 			{
@@ -376,7 +376,7 @@ namespace ecs
 			auto tmp = {(setInitialComponentValue(elementIndex, values, archetype->ecs->getTypeId<Ts>()), 0)...};
 		}
 
-		void save(std::ostream& stream) const
+		void save(istream& stream) const
 		{
 			stream.write((char*)&size, sizeof(size));
 			stream.write((char*)&buffer[0], size * sizeof(entityId));
@@ -407,7 +407,7 @@ namespace ecs
 			stream.write((char*)&lastIndex, sizeof(lastIndex));
 		}
 
-		void load(std::istream& stream, const std::vector<typeId>& typeIdsByLoadedIndex)
+		void load(istream& stream, const std::vector<typeId>& typeIdsByLoadedIndex)
 		{
 			stream.read((char*)&size, sizeof(size));
 			stream.read((char*)getEntityIds(), size * sizeof(entityId));
@@ -437,7 +437,7 @@ namespace ecs
 			}
 		}
 
-		void saveElement(std::ostream& stream, int elementIndex) const
+		void saveElement(istream& stream, int elementIndex) const
 		{
 			for (auto& componentArray : componentArrays)
 			{
@@ -449,7 +449,7 @@ namespace ecs
 
 		}
 
-		void loadElement(std::istream& stream, const std::vector<typeId>& typeIdsByLoadedIndex, int elementIndex)
+		void loadElement(istream& stream, const std::vector<typeId>& typeIdsByLoadedIndex, int elementIndex)
 		{
 			while (true)
 			{

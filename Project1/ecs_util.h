@@ -42,7 +42,7 @@ namespace ecs
 	}
 
 	template<class T>
-	void saveVector(std::ostream& stream, const std::vector<T>& v)
+	void saveVector(istream& stream, const std::vector<T>& v)
 	{
 		size_t count = v.size();
 		stream.write((const char*)&count, sizeof(count));
@@ -50,7 +50,7 @@ namespace ecs
 	}
 
 	template<class T>
-	void loadVector(std::istream& stream, std::vector<T>& v)
+	void loadVector(istream& stream, std::vector<T>& v)
 	{
 		size_t count = 0;
 		stream.read((char*)&count, sizeof(count));
@@ -94,9 +94,9 @@ namespace ecs
 
 	using typeId = TypeDescriptor*;
 
-//#ifdef _DEBUG
+#ifdef _DEBUG
 #define DEBUG_TYPEIDLISTS
-//#endif
+#endif
 
 	struct entityDataIndex
 	{
@@ -333,14 +333,14 @@ namespace ecs
 			return ret;
 		}
 
-		void save(std::ostream& stream) const
+		void save(istream& stream) const
 		{
 			size_t count = bitField.size();
 			stream.write((const char*)&count, sizeof(count));
 			stream.write((const char*)bitField.data(), bitField.size() * sizeof(uint8_t));
 		}
 
-		void load(std::istream& stream, const std::vector<typeId>& typeIdsByLoadedIndex)
+		void load(istream& stream, const std::vector<typeId>& typeIdsByLoadedIndex)
 		{
 			size_t s;
 			stream.read((char*)&s, sizeof(s));
@@ -481,7 +481,7 @@ namespace ecs
 		}
 
 		template<class T>
-		void saveComponent(std::ostream& stream, const typeId& tid, const T& value, ComponentType expectedType) const
+		void saveComponent(istream& stream, const typeId& tid, const T& value, ComponentType expectedType) const
 		{
 			if (tid->type != expectedType)
 				return;
@@ -492,7 +492,7 @@ namespace ecs
 		}
 
 		template<size_t... Is>
-		void saveComponents(std::ostream& stream, ComponentType expectedType, const typeId typeIds[sizeof...(Ts)], std::index_sequence<Is...>) const
+		void saveComponents(istream& stream, ComponentType expectedType, const typeId typeIds[sizeof...(Ts)], std::index_sequence<Is...>) const
 		{
 			auto tmp = { (saveComponent(stream, typeIds[Is], std::get<Is>(defaultValues), expectedType), 0)... };
 		}

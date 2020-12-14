@@ -197,9 +197,7 @@ namespace ecs
 		template<class ...Ts>
 		entityId createEntity(const Prefab<Ts...>& prefab)
 		{
-			if(oldPrefabCreation)
-				return std::apply([&](auto& ...x) { return createEntity<Ts...>(x...); }, prefab.defaultValues);
-			return std::apply([&](auto& ...x) { return createEntityAndInitialize(x...); }, prefab.defaultValues);
+			return std::apply([&](auto& ...x) { return createEntity(x...); }, prefab.defaultValues);
 		}
 
 		template<class ...Ts, class ...Us>
@@ -218,16 +216,7 @@ namespace ecs
 		}
 
 		template<class ...Ts>
-		entityId createEntity(const Ts&... initialValue)
-		{
-			EASY_BLOCK("createEntity");
-			entityId ret = createEntity_impl(getTypeIds<Ts...>());
-			int tmp[] = {(setComponent(ret, initialValue), 0)...};
-			return ret;
-		}
-
-		template<class ...Ts>
-		entityId createEntityAndInitialize(const Ts&... initialValue);
+		entityId createEntity(const Ts&... initialValue);
 
 		// If you call this from the outside, keepStateComponents needs to be true. False is only for internal usage.
 		bool deleteEntity(entityId id, bool keepStateComponents = true);
@@ -395,14 +384,14 @@ public:
 			return ret;
 		}
 
-		void savePrefab(std::ostream& stream, entityId id) const;
+		void savePrefab(istream& stream, entityId id) const;
 
 		template<class... Ts>
-		void savePrefab(std::ostream& stream, const Prefab<Ts...>& prefab);
+		void savePrefab(istream& stream, const Prefab<Ts...>& prefab);
 
-		entityId createEntityFromPrefabStream(std::istream& stream);
-		void save(std::ostream& stream) const;
-		void load(std::istream& stream);
+		entityId createEntityFromPrefabStream(istream& stream);
+		void save(istream& stream) const;
+		void load(istream& stream);
 
 		ComponentArrayFactory componentArrayFactory_;
 		std::vector<std::unique_ptr<TypeDescriptor>> typeDescriptors_;	// we store pointers so the raw TypeDescriptor* will stay stable for sure
@@ -419,7 +408,5 @@ public:
 
 		entityId nextEntityId = 1;
 		std::atomic<entityId> nextTempEntityId = 1;
-
-		bool oldPrefabCreation = false;
 	};
 }

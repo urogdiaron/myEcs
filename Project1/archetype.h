@@ -27,10 +27,10 @@ namespace ecs
 
 		std::tuple<entityDataIndex, entityId> setSharedComponent(entityDataIndex currentIndex, const tempList<ComponentData>& newSharedComponentDatas);
 
-		void save(std::ostream& stream) const;
-		void load(std::istream& stream, const std::vector<typeId>& typeIdsByLoadedIndex);
-		void savePrefab(std::ostream& stream, entityDataIndex entityIndex) const;
-		entityDataIndex createEntityFromStream(std::istream& stream, const std::vector<typeId>& typeIdsByLoadedIndex, entityId id);
+		void save(istream& stream) const;
+		void load(istream& stream, const std::vector<typeId>& typeIdsByLoadedIndex);
+		void savePrefab(istream& stream, entityDataIndex entityIndex) const;
+		entityDataIndex createEntityFromStream(istream& stream, const std::vector<typeId>& typeIdsByLoadedIndex, entityId id);
 
 	private:
 		std::tuple<Chunk*, int> createChunk();

@@ -70,9 +70,9 @@ namespace ecs
 	}
 
 	template<class ...Ts>
-	entityId Ecs::createEntityAndInitialize(const Ts&... initialValue)
+	entityId Ecs::createEntity(const Ts&... initialValue)
 	{
-		EASY_BLOCK("createEntityAndInitialize");
+		//EASY_FUNCTION();
 		entityId newEntityId = nextEntityId++;
 		typeIdList typeIds = getTypeIds<Ts...>();
 		auto [archIndex, archetype] = createArchetype(typeIds);
@@ -193,7 +193,7 @@ namespace ecs
 
 	void Ecs::executeCommmandBuffer()
 	{
-		EASY_FUNCTION("executeCommmandBuffer");
+		//EASY_FUNCTION("executeCommmandBuffer");
 		for (auto& itCommand : entityCommandBuffer_)
 		{
 			itCommand->execute(*this);
@@ -242,7 +242,7 @@ namespace ecs
 		//	_ASSERT_EXPR(0, "released type is not locked");
 	}
 
-	void Ecs::savePrefab(std::ostream& stream, entityId id) const
+	void Ecs::savePrefab(istream& stream, entityId id) const
 	{
 		auto it = entityDataIndexMap_.find(id);
 		if (it == entityDataIndexMap_.end())
@@ -265,7 +265,7 @@ namespace ecs
 		archetype->savePrefab(stream, it->second);
 	}
 
-	entityId Ecs::createEntityFromPrefabStream(std::istream& stream)
+	entityId Ecs::createEntityFromPrefabStream(istream& stream)
 	{
 		size_t typeDescCount = 0;
 		stream.read((char*)&typeDescCount, sizeof(typeDescCount));
@@ -294,7 +294,7 @@ namespace ecs
 	}
 
 	template<class... Ts>
-	void Ecs::savePrefab(std::ostream& stream, const Prefab<Ts...>& prefab)
+	void Ecs::savePrefab(istream& stream, const Prefab<Ts...>& prefab)
 	{
 		size_t count = typeDescriptors_.size();
 		stream.write((char*)&count, sizeof(size_t));
@@ -319,7 +319,7 @@ namespace ecs
 		stream.write((char*)&invalidIndex, sizeof(invalidIndex));
 	}
 
-	void Ecs::save(std::ostream& stream) const
+	void Ecs::save(istream& stream) const
 	{
 		size_t count = typeDescriptors_.size();
 		stream.write((char*)&count, sizeof(size_t));
@@ -429,7 +429,7 @@ namespace ecs
 		stream.write((char*)&nextEntityId, sizeof(nextEntityId));
 	}
 	
-	void Ecs::load(std::istream& stream)
+	void Ecs::load(istream& stream)
 	{
 		entityDataIndexMap_.clear();
 		archetypes_.clear();

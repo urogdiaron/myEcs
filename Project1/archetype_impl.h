@@ -246,7 +246,7 @@ namespace ecs
 		return { newChunk, newChunkIndex };
 	}
 	
-	void Archetype::save(std::ostream& stream) const
+	void Archetype::save(istream& stream) const
 	{
 		size_t chunkCount = chunks.size();
 		stream.write((char*)&chunkCount, sizeof(chunkCount));
@@ -256,7 +256,7 @@ namespace ecs
 		}
 	}
 	
-	void Archetype::load(std::istream& stream, const std::vector<typeId>& typeIdsByLoadedIndex)
+	void Archetype::load(istream& stream, const std::vector<typeId>& typeIdsByLoadedIndex)
 	{
 		size_t chunkCount = 0;
 		stream.read((char*)&chunkCount, sizeof(chunkCount));
@@ -270,7 +270,7 @@ namespace ecs
 		}
 	}
 
-	void Archetype::savePrefab(std::ostream& stream, entityDataIndex entityIndex) const
+	void Archetype::savePrefab(istream& stream, entityDataIndex entityIndex) const
 	{
 		auto chunk = chunks[entityIndex.chunkIndex].get();
 		chunk->saveElement(stream, entityIndex.elementIndex);
@@ -288,7 +288,7 @@ namespace ecs
 		stream.write((char*)&invalidComponentIndex, sizeof(invalidComponentIndex));
 	}
 
-	entityDataIndex Archetype::createEntityFromStream(std::istream& stream, const std::vector<typeId>& typeIdsByLoadedIndex, entityId id)
+	entityDataIndex Archetype::createEntityFromStream(istream& stream, const std::vector<typeId>& typeIdsByLoadedIndex, entityId id)
 	{
 		entityDataIndex loadedEntityIndex;
 		loadedEntityIndex.archetypeIndex = archetypeIndex;
