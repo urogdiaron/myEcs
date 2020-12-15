@@ -362,18 +362,19 @@ namespace ecs
 		}
 
 		template<class T>
-		void setInitialComponentValue(int elementIndex, const T& value, typeId tid)
+		int setInitialComponentValue(int elementIndex, const T& value, typeId tid)
 		{
 			if (tid->type != ComponentType::Regular || tid->size == 0)
-				return;
+				return 0;
 			auto componentArray = getArray(tid);
 			new (&componentArray->buffer[elementIndex * componentArray->elementSize]) T{ value };
+			return 0;
 		}
 
 		template<class... Ts>
 		void setInitialComponentValues(int elementIndex, const Ts&... values)
 		{
-			auto tmp = {(setInitialComponentValue(elementIndex, values, archetype->ecs->getTypeId<Ts>()), 0)...};
+			auto tmp = { setInitialComponentValue(elementIndex, values, archetype->ecs->getTypeId<Ts>())... };
 		}
 
 		void save(istream& stream) const

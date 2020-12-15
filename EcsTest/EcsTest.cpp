@@ -78,8 +78,9 @@ struct C
 
 void printAs(ecs::Ecs& ecs)
 {
-	for (auto& [id, a] : ecs.view<A>())
+	for (auto it : ecs.view<A>())
 	{
+		auto& [id, a] = it;
 		printf("A {%u, %d}\n", id, a.a);
 	}
 
